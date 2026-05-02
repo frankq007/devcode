@@ -1,0 +1,7 @@
+{
+  "src": [
+    "pages/ScanPage",
+    "pages/MainPage",
+    "pages/Index"
+  ]
+}

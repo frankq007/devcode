@@ -1,0 +1,88 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "OpenCode Remote Control App"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Remote control OpenCode AI assistant"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "DevCode"
+    },
+    {
+      "name": "app_name",
+      "value": "DevCode"
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "Used to connect to the OpenCode proxy server"
+    },
+    {
+      "name": "permission_network_reason",
+      "value": "Used to get network status for connection"
+    },
+    {
+      "name": "permission_microphone_reason",
+      "value": "Used for voice command input"
+    },
+    {
+      "name": "permission_camera_reason",
+      "value": "Used for QR code scanning to pair with the server"
+    },
+    {
+      "name": "scan_title",
+      "value": "Scan QR Code"
+    },
+    {
+      "name": "scan_instruction",
+      "value": "Scan the QR code displayed on your computer to connect"
+    },
+    {
+      "name": "main_title",
+      "value": "OpenCode Remote Control"
+    },
+    {
+      "name": "voice_hint",
+      "value": "Hold to speak"
+    },
+    {
+      "name": "files_title",
+      "value": "Files"
+    },
+    {
+      "name": "permission_title",
+      "value": "Permission Required"
+    },
+    {
+      "name": "allow",
+      "value": "Allow"
+    },
+    {
+      "name": "deny",
+      "value": "Deny"
+    },
+    {
+      "name": "modify",
+      "value": "Modify"
+    },
+    {
+      "name": "connecting",
+      "value": "Connecting..."
+    },
+    {
+      "name": "connected",
+      "value": "Connected"
+    },
+    {
+      "name": "disconnected",
+      "value": "Disconnected"
+    },
+    {
+      "name": "send_command",
+      "value": "Send Command"
+    }
+  ]
+}

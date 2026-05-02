@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+oh_modules/
+
+# Build outputs
+.hvigor/
+entry/build/
+**/build/
+**/cache/
+**/intermediates/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test outputs
+coverage/
+test-results/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

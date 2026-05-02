@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevCode 配对二维码</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .qr-container {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .qr-image {
+      max-width: 300px;
+      border: 2px solid #4CAF50;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .info {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .info-item {
+      margin: 10px 0;
+      font-size: 14px;
+    }
+    .label {
+      color: #888;
+      font-weight: bold;
+    }
+    .value {
+      color: #333;
+      margin-left: 10px;
+    }
+    .warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 20px 0;
+      color: #856404;
+    }
+    .refresh-btn {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .refresh-btn:hover {
+      background: #45a049;
+    }
+    .status {
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .status.connected {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.waiting {
+      background: #cce5ff;
+      color: #004085;
+    }
+    .instructions {
+      margin: 20px 0;
+      padding: 15px;
+      background: #e7f3ff;
+      border-radius: 8px;
+    }
+    .instructions h3 {
+      margin-bottom: 10px;
+      color: #0056b3;
+    }
+    .instructions ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .instructions li {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>DevCode 扫码配对</h1>
+    
+    <div class="status waiting" id="status">
+      等待扫码配对...
+    </div>
+
+    <div class="qr-container">
+      <img id="qr-image" class="qr-image" alt="二维码">
+    </div>
+
+    <div class="info" id="info">
+      <div class="info-item">
+        <span class="label">服务器 IP:</span>
+        <span class="value" id="ip">-</span>
+      </div>
+      <div class="info-item">
+        <span class="label">WebSocket 端口:</span>
+        <span class="value" id="wsPort">-</span>
+      </div>
+      <div class="info-item">
+        <span class="label">HTTP 端口:</span>
+        <span class="value" id="httpPort">-</span>
+      </div>
+      <div class="info-item">
+        <span class="label">有效期:</span>
+        <span class="value" id="expire">5 分钟</span>
+      </div>
+    </div>
+
+    <div class="warning">
+      ⚠️ 二维码有效期 5 分钟，过期后请刷新
+    </div>
+
+    <div class="instructions">
+      <h3>使用说明</h3>
+      <ul>
+        <li>打开鸿蒙 DevCode App</li>
+        <li>点击"开始扫码"按钮</li>
+        <li>扫描上方二维码</li>
+        <li>配对成功后即可远程控制 OpenCode</li>
+      </ul>
+    </div>
+
+    <button class="refresh-btn" onclick="refreshQR()">
+      刷新二维码
+    </button>
+  </div>
+
+  <script>
+    let token = '';
+    let expireTime = 0;
+    let refreshInterval = null;
+
+    // 加载二维码
+    async function loadQRCode() {
+      try {
+        const response = await fetch('/qrcode');
+        const data = await response.json();
+
+        if (data.success) {
+          document.getElementById('qr-image').src = data.qrImage;
+          document.getElementById('ip').textContent = data.ip;
+          document.getElementById('wsPort').textContent = data.wsPort;
+          document.getElementById('httpPort').textContent = data.httpPort;
+          
+          token = data.token;
+          expireTime = data.expire;
+
+          // 计算剩余时间
+          updateExpireTime();
+          
+          // 定期更新剩余时间
+          if (refreshInterval) clearInterval(refreshInterval);
+          refreshInterval = setInterval(updateExpireTime, 1000);
+        } else {
+          document.getElementById('status').textContent = '获取二维码失败';
+          document.getElementById('status').className = 'status';
+        }
+      } catch (e) {
+        console.error('Error:', e);
+        document.getElementById('status').textContent = '服务器连接失败';
+        document.getElementById('status').className = 'status';
+      }
+    }
+
+    // 更新剩余时间
+    function updateExpireTime() {
+      const now = Date.now();
+      const remaining = Math.max(0, (expireTime - now) / 1000);
+      
+      if (remaining <= 0) {
+        document.getElementById('expire').textContent = '已过期，请刷新';
+        document.getElementById('status').textContent = '二维码已过期';
+        document.getElementById('status').className = 'status';
+        clearInterval(refreshInterval);
+      } else {
+        document.getElementById('expire').textContent = Math.floor(remaining) + ' 秒';
+      }
+    }
+
+    // 刷新二维码
+    function refreshQRCode() {
+      document.getElementById('status').textContent = '正在生成新二维码...';
+      document.getElementById('status').className = 'status waiting';
+      loadQRCode();
+    }
+
+    // 页面加载时获取二维码
+    loadQRCode();
+  </script>
+</body>
+</html>
