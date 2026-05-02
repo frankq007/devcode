@@ -156,7 +156,7 @@ struct ScanPage {
     const testConfig: ConnectionConfig = {
       token: 'test-token-' + Date.now().toString(),
       expire: Date.now() + 5 * 60 * 1000,
-      ip: '100.64.0.2',
+      ip: '100.117.37.34',
       wsPort: 8080,
       httpPort: 8081
     };
