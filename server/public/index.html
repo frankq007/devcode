@@ -133,6 +133,11 @@
         <span class="value" id="httpPort">-</span>
       </div>
       <div class="info-item">
+        <span class="label">配对Token:</span>
+        <span class="value" id="token" style="font-family: monospace; background: #e8e8e8; padding: 2px 6px; border-radius: 4px;">-</span>
+        <button onclick="copyToken()" style="margin-left: 10px; padding: 4px 10px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">复制</button>
+      </div>
+      <div class="info-item">
         <span class="label">有效期:</span>
         <span class="value" id="expire">5 分钟</span>
       </div>
@@ -145,9 +150,15 @@
     <div class="instructions">
       <h3>使用说明</h3>
       <ul>
-        <li>打开鸿蒙 DevCode App</li>
-        <li>点击"开始扫码"按钮</li>
-        <li>扫描上方二维码</li>
+        <li><strong>扫码配对：</strong>打开鸿蒙 DevCode App，点击"开始扫码"按钮，扫描上方二维码</li>
+        <li><strong>手动输入：</strong>点击"复制Token"，然后在App中点击"手动输入"，输入以下信息：
+          <ul style="margin-top: 5px; color: #666;">
+            <li>服务器IP：<span id="ip2">-</span></li>
+            <li>WebSocket端口：<span id="wsPort2">-</span></li>
+            <li>HTTP端口：<span id="httpPort2">-</span></li>
+            <li>Token：（点击上方"复制"按钮获取）</li>
+          </ul>
+        </li>
         <li>配对成功后即可远程控制 OpenCode</li>
       </ul>
     </div>
@@ -173,6 +184,10 @@
           document.getElementById('ip').textContent = data.ip;
           document.getElementById('wsPort').textContent = data.wsPort;
           document.getElementById('httpPort').textContent = data.httpPort;
+          document.getElementById('token').textContent = data.token;
+          document.getElementById('ip2').textContent = data.ip;
+          document.getElementById('wsPort2').textContent = data.wsPort;
+          document.getElementById('httpPort2').textContent = data.httpPort;
           
           token = data.token;
           expireTime = data.expire;
@@ -214,6 +229,25 @@
       document.getElementById('status').textContent = '正在生成新二维码...';
       document.getElementById('status').className = 'status waiting';
       loadQRCode();
+    }
+
+    // 复制Token
+    function copyToken() {
+      const tokenText = document.getElementById('token').textContent;
+      if (tokenText && tokenText !== '-') {
+        navigator.clipboard.writeText(tokenText).then(() => {
+          alert('Token已复制到剪贴板！\n\n您现在可以在App手动输入页面粘贴Token');
+        }).catch(err => {
+          // 备用方案
+          const textarea = document.createElement('textarea');
+          textarea.value = tokenText;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          alert('Token已复制！');
+        });
+      }
     }
 
     // 页面加载时获取二维码

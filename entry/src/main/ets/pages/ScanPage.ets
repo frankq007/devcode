@@ -17,8 +17,13 @@ struct ScanPage {
   @State statusText: string = '准备扫码';
   @State showError: boolean = false;
   @State errorMsg: string = '';
-  @State manualInput: string = '';
   @State showManualInput: boolean = false;
+  
+  // 手动输入字段
+  @State manualIp: string = '';
+  @State manualWsPort: string = '8080';
+  @State manualHttpPort: string = '8081';
+  @State manualToken: string = '';
  
   build() {
     Column() {
@@ -35,6 +40,7 @@ struct ScanPage {
         .margin({ bottom: 30 });
  
       if (!this.showManualInput) {
+        // 扫码区域
         Stack() {
           Column() {
             if (this.isScanning) {
@@ -90,17 +96,54 @@ struct ScanPage {
       }
  
       if (this.showManualInput) {
+        // 手动输入区域
         Column() {
-          TextInput({ placeholder: '输入服务器地址 (如: 100.64.0.2:8080)' })
-            .width('80%')
-            .height(50)
-            .margin({ bottom: 10 })
+          // 提示
+          Text('请先在电脑浏览器访问 http://服务器IP:8081/qrcode 获取配对信息')
+            .fontSize(12)
+            .fontColor('#888888')
+            .width('85%')
+            .margin({ bottom: 15 });
+ 
+          // IP输入
+          TextInput({ placeholder: '服务器IP (如: 100.117.37.34)', text: this.manualIp })
+            .width('85%')
+            .height(45)
+            .margin({ bottom: 8 })
             .onChange((value: string) => {
-              this.manualInput = value;
+              this.manualIp = value;
             });
  
+          // WebSocket端口
+          TextInput({ placeholder: 'WebSocket端口', text: this.manualWsPort })
+            .width('85%')
+            .height(45)
+            .margin({ bottom: 8 })
+            .onChange((value: string) => {
+              this.manualWsPort = value;
+            });
+ 
+          // HTTP端口
+          TextInput({ placeholder: 'HTTP端口', text: this.manualHttpPort })
+            .width('85%')
+            .height(45)
+            .margin({ bottom: 8 })
+            .onChange((value: string) => {
+              this.manualHttpPort = value;
+            });
+ 
+          // Token输入
+          TextInput({ placeholder: '配对Token (从/qrcode页面获取)', text: this.manualToken })
+            .width('85%')
+            .height(45)
+            .margin({ bottom: 15 })
+            .onChange((value: string) => {
+              this.manualToken = value;
+            });
+ 
+          // 连接按钮
           Button('连接')
-            .width('80%')
+            .width('85%')
             .height(50)
             .backgroundColor('#4CAF50')
             .onClick(() => {
@@ -111,19 +154,27 @@ struct ScanPage {
         .margin({ bottom: 30 });
       }
  
+      // 切换按钮
       Button(this.showManualInput ? '使用扫码' : '手动输入')
         .width('60%')
         .height(40)
         .backgroundColor('#666666')
         .onClick(() => {
           this.showManualInput = !this.showManualInput;
+          if (this.showManualInput) {
+            this.statusText = '请输入配对信息';
+          } else {
+            this.statusText = '准备扫码';
+          }
         });
  
+      // 状态文字
       Text(this.statusText)
         .fontSize(14)
         .fontColor('#888888')
         .margin({ top: 20 });
  
+      // 错误提示
       if (this.showError) {
         Column() {
           Text(this.errorMsg)
@@ -138,7 +189,7 @@ struct ScanPage {
             .margin({ top: 10 })
             .onClick(() => {
               this.showError = false;
-              this.statusText = '准备扫码';
+              this.statusText = this.showManualInput ? '请输入配对信息' : '准备扫码';
             });
         }
       }
@@ -153,6 +204,7 @@ struct ScanPage {
     this.isScanning = true;
     this.statusText = '请将二维码放入框内';
     
+    // 模拟扫码 - 实际需要Scan Kit集成
     const testConfig: ConnectionConfig = {
       token: 'test-token-' + Date.now().toString(),
       expire: Date.now() + 5 * 60 * 1000,
@@ -285,13 +337,44 @@ struct ScanPage {
   }
  
   connectManual(): void {
-    const parts: string[] = this.manualInput.split(':');
-    if (parts.length < 2) {
+    // 验证输入
+    if (this.manualIp.trim().length === 0) {
       this.showError = true;
-      this.errorMsg = '请输入完整地址，格式: IP:端口';
+      this.errorMsg = '请输入服务器IP地址';
       return;
     }
-    
-    this.statusText = '请先在电脑端访问 /qrcode 获取 token';
+ 
+    if (this.manualToken.trim().length === 0) {
+      this.showError = true;
+      this.errorMsg = '请输入配对Token（从电脑端/qrcode页面获取）';
+      return;
+    }
+ 
+    const wsPort: number = parseInt(this.manualWsPort) || 8080;
+    const httpPort: number = parseInt(this.manualHttpPort) || 8081;
+ 
+    if (isNaN(wsPort) || wsPort <= 0 || wsPort > 65535) {
+      this.showError = true;
+      this.errorMsg = 'WebSocket端口无效，请输入1-65535之间的数字';
+      return;
+    }
+ 
+    if (isNaN(httpPort) || httpPort <= 0 || httpPort > 65535) {
+      this.showError = true;
+      this.errorMsg = 'HTTP端口无效，请输入1-65535之间的数字';
+      return;
+    }
+ 
+    // 构造配置
+    const config: ConnectionConfig = {
+      token: this.manualToken.trim(),
+      expire: Date.now() + 5 * 60 * 1000, // 5分钟有效期
+      ip: this.manualIp.trim(),
+      wsPort: wsPort,
+      httpPort: httpPort
+    };
+ 
+    this.statusText = '正在连接服务器...';
+    this.doConnect(config);
   }
 }
