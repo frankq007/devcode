@@ -6,11 +6,20 @@ import { router } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { wsService } from '../common/WebSocketService';
 import { PermissionDialog } from '../components/PermissionDialog';
-import type { FileInfo, TaskMessage } from '../common/Types';
+import type { FileInfo, TaskMessage, ConnectionConfig } from '../common/Types';
  
 const DOMAIN = 0xFF00;
 const TAG = 'MainPage';
- 
+
+// DEBUG: 固定配置 - 使用 ConnectionConfig 类型
+const DEBUG_CONFIG: ConnectionConfig = {
+  ip: '100.117.37.34',
+  wsPort: 8080,
+  httpPort: 8081,
+  token: 'debug-token-' + Date.now().toString(),
+  expire: Date.now() + 5 * 60 * 1000
+};
+
 @Entry
 @Component
 struct MainPage {
@@ -21,31 +30,44 @@ struct MainPage {
   @State currentPermissionId: string = '';
   @State currentPermissionCommand: string = '';
   @State currentPermissionExplanation: string = '';
-  @State connectionStatus: string = '已连接';
-  @State serverIp: string = '';
-  @State httpPort: number = 8081;
+  @State connectionStatus: string = '连接中...';
+  @State serverIp: string = DEBUG_CONFIG.ip;
+  @State httpPort: number = DEBUG_CONFIG.httpPort;
   @State isRecording: boolean = false;
- 
+  @State lastAiMessageId: string = '';
+
   aboutToAppear(): void {
-    const params: ESObject = router.getParams() as ESObject;
-    if (params !== null && params !== undefined) {
-      this.serverIp = params['serverIp'] as string || '100.64.0.2';
-      this.httpPort = params['httpPort'] as number || 8081;
-    }
- 
+    hilog.info(DOMAIN, TAG, '=== MainPage aboutToAppear (DEBUG MODE) ===');
+    hilog.info(DOMAIN, TAG, 'Server IP: %{public}s', this.serverIp);
+    hilog.info(DOMAIN, TAG, 'HTTP Port: %{public}d', this.httpPort);
+
+    // DEBUG: 直接连接
+    this.connectionStatus = '正在连接...';
+    wsService.connect(DEBUG_CONFIG).then((success: boolean) => {
+      hilog.info(DOMAIN, TAG, 'Connect result: %{public}s', success ? 'SUCCESS' : 'FAILED');
+      if (success) {
+        this.connectionStatus = '已连接(调试模式)';
+        hilog.info(DOMAIN, TAG, 'WebSocket connected, waiting for auth...');
+      } else {
+        this.connectionStatus = '连接失败';
+        hilog.error(DOMAIN, TAG, 'WebSocket connect failed');
+      }
+    }).catch((e: Error) => {
+      hilog.error(DOMAIN, TAG, 'Connect error: %{public}s', e.message);
+      this.connectionStatus = '连接错误: ' + e.message;
+    });
+
     wsService.onMessage((msg: ESObject) => {
+      hilog.info(DOMAIN, TAG, '>>> Received WS message type: %{public}s', msg['type'] as string);
       this.handleMessage(msg);
     });
- 
+
     wsService.onStatusChange((connected: boolean) => {
+      hilog.info(DOMAIN, TAG, '>>> Status changed: %{public}s', connected ? 'CONNECTED' : 'DISCONNECTED');
       this.connectionStatus = connected ? '已连接' : '已断开';
-      if (!connected) {
-        router.replaceUrl({ url: 'pages/ScanPage' });
-      }
     });
- 
-    wsService.requestFileList();
-    hilog.info(DOMAIN, TAG, 'MainPage initialized');
+
+    hilog.info(DOMAIN, TAG, 'MainPage initialized (DEBUG)');
   }
  
   build() {
@@ -188,14 +210,23 @@ struct MainPage {
     .height('100%')
   }
  
-  handleMessage(msg: ESObject): void {
+handleMessage(msg: ESObject): void {
     const msgType: string = msg['type'] as string
-    hilog.debug(DOMAIN, TAG, `Handle message: ${msgType}`)
- 
-    if (msgType === 'task_status') {
+    hilog.info(DOMAIN, TAG, '>>> handleMessage: type=%{public}s', msgType)
+
+    if (msgType === 'ai_response') {
+      hilog.info(DOMAIN, TAG, '>>> AI_RESPONSE received!');
+      this.handleAiResponse(msg)
+    } else if (msgType === 'task_status') {
+      hilog.info(DOMAIN, TAG, '>>> TASK_STATUS: %{public}s', msg['status'] as string);
       this.handleTaskStatus(msg)
     } else if (msgType === 'permission_request') {
+      hilog.info(DOMAIN, TAG, '>>> PERMISSION_REQUEST');
       this.handlePermissionRequest(msg)
+    } else if (msgType === 'auth_result') {
+      hilog.info(DOMAIN, TAG, '>>> AUTH_RESULT: %{public}s', msg['success'] as boolean ? 'SUCCESS' : 'FAILED');
+    } else if (msgType === 'exec_ack') {
+      hilog.info(DOMAIN, TAG, '>>> EXEC_ACK');
     } else if (msgType === 'file_added') {
       this.handleFileAdded(msg)
     } else if (msgType === 'file_updated') {
@@ -205,26 +236,56 @@ struct MainPage {
     } else if (msgType === 'file_list') {
       this.handleFileList(msg)
     } else if (msgType === 'error') {
+      hilog.error(DOMAIN, TAG, '>>> ERROR: %{public}s', msg['message'] as string);
       this.handleError(msg)
+    } else {
+      hilog.warn(DOMAIN, TAG, '>>> UNKNOWN message type: %{public}s', msgType);
     }
   }
- 
-  handleTaskStatus(msg: ESObject): void {
+
+  handleAiResponse(msg: ESObject): void {
     const content: string = msg['content'] as string || ''
-    const statusStr: string = msg['status'] as string
-    const status: 'pending' | 'running' | 'completed' | 'error' = 
-      statusStr === 'running' ? 'running' :
-      statusStr === 'completed' ? 'completed' :
-      statusStr === 'error' ? 'error' : 'pending'
+    const messageId: string = msg['messageID'] as string || ''
+    
+    hilog.info(DOMAIN, TAG, '>>> handleAiResponse: contentLen=%{public}d, msgId=%{public}s', content.length, messageId);
+    
+    if (messageId.length > 0 && messageId === this.lastAiMessageId) {
+      hilog.info(DOMAIN, TAG, '>>> Updating existing message');
+      for (let i = 0; i < this.messages.length; i++) {
+        if (this.messages[i].id === 'ai-' + messageId) {
+          this.messages[i].content = content
+          this.messages[i].status = 'completed'
+          return
+        }
+      }
+    }
     
     const newMsg: TaskMessage = {
-      id: 'msg-' + Date.now().toString(),
+      id: 'ai-' + messageId,
       type: 'ai',
       content: content,
       timestamp: Date.now(),
-      status: status
+      status: 'completed'
     }
+    hilog.info(DOMAIN, TAG, '>>> Adding new AI message to list');
     this.messages.push(newMsg)
+    this.lastAiMessageId = messageId
+  }
+ 
+  handleTaskStatus(msg: ESObject): void {
+    const statusStr: string = msg['status'] as string
+    const messageText: string = msg['message'] as string || ''
+    
+    if (statusStr === 'running') {
+      const newMsg: TaskMessage = {
+        id: 'status-' + Date.now().toString(),
+        type: 'system',
+        content: messageText.length > 0 ? messageText : '任务执行中...',
+        timestamp: Date.now(),
+        status: 'running'
+      }
+      this.messages.push(newMsg)
+    }
   }
  
   handlePermissionRequest(msg: ESObject): void {

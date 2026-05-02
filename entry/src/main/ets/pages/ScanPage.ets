@@ -20,19 +20,19 @@ struct ScanPage {
   @State showManualInput: boolean = false;
   
   // 手动输入字段
-  @State manualIp: string = '';
+  @State manualIp: string = '100.117.37.34';
   @State manualWsPort: string = '8080';
   @State manualHttpPort: string = '8081';
   @State manualToken: string = '';
  
   build() {
     Column() {
-      Text($r('app.string.scan_title'))
+      Text('DevCode')
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .margin({ top: 40, bottom: 20 });
  
-      Text($r('app.string.scan_instruction'))
+      Text('扫一扫你电脑上的二维码')
         .fontSize(16)
         .fontColor('#666666')
         .textAlign(TextAlign.Center)
