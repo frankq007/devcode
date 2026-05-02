@@ -248,7 +248,7 @@ function scheduleSseReconnect() {
 function handleOpenCodeEvent(event) {
   const eventType = event.type || event.name;
   
-  if (eventType !== 'message.part.delta') {
+  if (eventType !== 'message.part.delta' && eventType !== 'server.heartbeat') {
     console.log('[OpenCode] 事件:', eventType);
   }
 
@@ -258,41 +258,42 @@ function handleOpenCodeEvent(event) {
   } else if (eventType === 'message.updated') {
     const props = event.properties || {};
     const info = props.info || {};
-    // 只记录 assistant 消息的 ID
     if (props.sessionID && info.id && info.role === 'assistant') {
       state.lastSentMessageId = info.id;
-      
-      // 实时发送执行状态（如果有正在执行的工具）
-      if (props.parts) {
-        const runningTools = props.parts.filter(p => p.type === 'tool' && p.state?.status === 'running');
-        if (runningTools.length > 0) {
-          const cmd = runningTools[0].state?.input?.command || '';
-          broadcastToClients({ 
-            type: 'task_status', 
-            status: 'running',
-            message: `正在执行: ${cmd}`
-          });
-        }
-      }
     }
   } else if (eventType === 'message.part.delta') {
-    state.isSessionIdle = false;
-    state.isSendingMessage = true;
+    // 只在首次检测到非 idle 时发送
+    if (state.isSessionIdle) {
+      state.isSessionIdle = false;
+      state.isSendingMessage = true;
+      broadcastToClients({ type: 'task_status', status: 'running', message: '正在处理...' });
+    }
   } else if (eventType === 'session.message') {
     handleNewMessage(event.data);
   } else if (eventType === 'permission.request') {
     handlePermissionEvent(event.data);
   } else if (eventType === 'session.status') {
     const status = event.data?.status || 'running';
-    if (status !== 'idle') {
+    if (status === 'idle') {
+      if (!state.isSessionIdle) {
+        broadcastToClients({ type: 'task_status', status: 'idle', message: '完成' });
+      }
+      state.isSessionIdle = true;
+      state.isSendingMessage = false;
+    } else {
+      if (state.isSessionIdle) {
+        broadcastToClients({ type: 'task_status', status, message: '正在处理...' });
+      }
       state.isSessionIdle = false;
       state.isSendingMessage = true;
     }
   } else if (eventType === 'session.idle') {
+    if (!state.isSessionIdle) {
+      broadcastToClients({ type: 'task_status', status: 'idle', message: '完成' });
+    }
     state.isSessionIdle = true;
     state.isSendingMessage = false;
     
-    // 只在 idle 时发送 assistant 消息
     if (state.lastSentMessageId && state.currentSessionId) {
       if (state.lastSentResponseId !== state.lastSentMessageId) {
         state.lastSentResponseId = state.lastSentMessageId;
@@ -300,13 +301,9 @@ function handleOpenCodeEvent(event) {
       }
     }
   } else if (eventType === 'session.error') {
+    broadcastToClients({ type: 'task_status', status: 'error', message: 'Session 错误' });
     state.isSessionIdle = true;
     state.isSendingMessage = false;
-    broadcastToClients({ 
-      type: 'task_status', 
-      status: 'error',
-      message: 'Session 错误'
-    });
   }
 }
 

@@ -249,6 +249,9 @@ handleMessage(msg: ESObject): void {
     
     hilog.info(DOMAIN, TAG, '>>> handleAiResponse: contentLen=%{public}d, msgId=%{public}s', content.length, messageId);
     
+    // 移除运行状态消息
+    this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
+    
     if (messageId.length > 0 && messageId === this.lastAiMessageId) {
       hilog.info(DOMAIN, TAG, '>>> Updating existing message');
       for (let i = 0; i < this.messages.length; i++) {
@@ -277,14 +280,19 @@ handleMessage(msg: ESObject): void {
     const messageText: string = msg['message'] as string || ''
     
     if (statusStr === 'running') {
+      // 移除旧的运行状态消息，添加新的
+      this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
       const newMsg: TaskMessage = {
-        id: 'status-' + Date.now().toString(),
+        id: 'status-running',
         type: 'system',
         content: messageText.length > 0 ? messageText : '任务执行中...',
         timestamp: Date.now(),
         status: 'running'
       }
       this.messages.push(newMsg)
+    } else if (statusStr === 'idle' || statusStr === 'ready' || statusStr === 'completed') {
+      // 移除运行状态消息
+      this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
     }
   }
  
