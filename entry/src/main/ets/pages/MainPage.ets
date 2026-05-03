@@ -35,7 +35,7 @@ struct MainPage {
   @State lastAiMessageId: string = '';
   @State showMenu: boolean = false;
   @State showFilesPanel: boolean = false;
-  @State listScroller: Scroller = new Scroller();
+  private listScroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
     this.connectionStatus = '正在连接...';
@@ -95,21 +95,21 @@ struct MainPage {
         // 下拉菜单
         if (this.showMenu) {
           Column() {
-            MenuItem({ text: '扫一扫', onClick: () => {
+            MenuButtonItem({ text: '扫一扫', onMenuClick: () => {
               this.showMenu = false
               router.pushUrl({ url: 'pages/ScanPage' })
             }})
             
             Divider().color('#EEEEEE').height(0.5)
             
-            MenuItem({ text: '文件', onClick: () => {
+            MenuButtonItem({ text: '文件', onMenuClick: () => {
               this.showMenu = false
               this.showFilesPanel = true
             }})
             
             Divider().color('#EEEEEE').height(0.5)
             
-            MenuItem({ text: '设置', onClick: () => {
+            MenuButtonItem({ text: '设置', onMenuClick: () => {
               this.showMenu = false
             }})
           }
@@ -369,9 +369,9 @@ struct MainPage {
 
 // 菜单项组件
 @Component
-struct MenuItem {
+struct MenuButtonItem {
   @Prop text: string = ''
-  onClick: () => void = () => {}
+  onMenuClick: () => void = () => {}
 
   build() {
     Text(this.text)
@@ -380,7 +380,7 @@ struct MenuItem {
       .padding({ top: 10, bottom: 10, left: 12, right: 12 })
       .width('100%')
       .textAlign(TextAlign.Center)
-      .onClick(() => { this.onClick() })
+      .onClick(() => { this.onMenuClick() })
   }
 }
 
