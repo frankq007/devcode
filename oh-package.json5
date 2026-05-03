@@ -2,7 +2,7 @@
   "modelVersion": "6.1.0",
   "description": "Please describe the basic information.",
   "dependencies": {
-    "@luvi/lv-markdown-in": "^1.0.0"
+    "@luvi/lv-markdown-in": "^3.1.0"
   },
   "devDependencies": {
     "@ohos/hypium": "1.0.25",

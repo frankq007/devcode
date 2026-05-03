@@ -1,19 +1,23 @@
 /**
  * Markdown 渲染组件
- * 使用 @luvi/lv-markdown-in 渲染 Markdown 内容
+ * 使用 @luvi/lv-markdown-in 3.x 版本的 Markdown 组件
  */
 
-import { lvMarkdownIn } from '@luvi/lv-markdown-in';
+import { Markdown, MarkdownController, MdCallback } from '@luvi/lv-markdown-in';
 
 @Component
 export struct MarkdownRenderer {
   @Prop content: string = '';
-  @Prop fontSize: number = 14;
+  @Prop fontSize: number = 16;
   @Prop fontColor: string = '#333333';
+  private controller: MarkdownController = new MarkdownController();
 
   build() {
     Column() {
-      lvMarkdownIn({ text: this.content })
+      Markdown({
+        text: this.content,
+        controller: this.controller
+      })
     }
     .width('100%')
   }
@@ -22,12 +26,16 @@ export struct MarkdownRenderer {
 @Component
 export struct SimpleMarkdownText {
   @Prop content: string = '';
-  @Prop fontSize: number = 14;
+  @Prop fontSize: number = 16;
   @Prop fontColor: string = '#333333';
+  private controller: MarkdownController = new MarkdownController();
 
   build() {
     Column() {
-      lvMarkdownIn({ text: this.content })
+      Markdown({
+        text: this.content,
+        controller: this.controller
+      })
     }
     .width('100%')
   }
