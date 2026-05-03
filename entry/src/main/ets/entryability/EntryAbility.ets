@@ -22,13 +22,24 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(DOMAIN, TAG, 'Ability onWindowStageCreate - DEBUG MODE: Skip ScanPage');
 
-    // DEBUG: 直接跳转到 MainPage，使用固定配置
     windowStage.loadContent('pages/MainPage', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, TAG, 'Failed to load MainPage. Cause: %{public}s', JSON.stringify(err));
         return;
       }
       hilog.info(DOMAIN, TAG, 'Succeeded in loading MainPage (DEBUG mode)');
+    });
+    
+    windowStage.getMainWindow((err, mainWindow) => {
+      if (err.code) {
+        hilog.error(DOMAIN, TAG, 'Failed to get main window. Cause: %{public}s', JSON.stringify(err));
+        return;
+      }
+      try {
+        mainWindow.setWindowSystemBarEnable(['status', 'navigation']);
+      } catch (e) {
+        hilog.error(DOMAIN, TAG, 'Failed to set window properties. Cause: %{public}s', JSON.stringify(e));
+      }
     });
   }
 

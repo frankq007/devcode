@@ -2,7 +2,7 @@
  * 主控页面 - 微信风格气泡对话
  */
 
-import { router } from '@kit.ArkUI';
+import { router, KeyboardAvoidMode } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { wsService } from '../common/WebSocketService';
 import { PermissionDialog } from '../components/PermissionDialog';
@@ -38,6 +38,8 @@ struct MainPage {
   private listScroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+    
     this.connectionStatus = '正在连接...';
     wsService.connect(DEBUG_CONFIG).then((success: boolean) => {
       this.connectionStatus = success ? '已连接' : '连接失败';
@@ -92,37 +94,7 @@ struct MainPage {
         .padding({ left: 12, right: 12 })
         .backgroundColor('#FFFFFF')
 
-        // 下拉菜单
-        if (this.showMenu) {
-          Column() {
-            MenuButtonItem({ text: '扫一扫', onMenuClick: () => {
-              this.showMenu = false
-              router.pushUrl({ url: 'pages/ScanPage' })
-            }})
-            
-            Divider().color('#EEEEEE').height(0.5)
-            
-            MenuButtonItem({ text: '文件', onMenuClick: () => {
-              this.showMenu = false
-              this.showFilesPanel = true
-            }})
-            
-            Divider().color('#EEEEEE').height(0.5)
-            
-            MenuButtonItem({ text: '设置', onMenuClick: () => {
-              this.showMenu = false
-            }})
-          }
-          .width(100)
-          .backgroundColor('#FFFFFF')
-          .borderRadius(6)
-          .shadow({ radius: 3, color: '#00000033', offsetY: 1 })
-          .position({ x: '100%', y: 44 })
-          .translate({ x: -112 })
-          .zIndex(100)
-        }
-
-        // 消息列表
+        // 消息列表 - layoutWeight(1) 自动压缩
         List({ scroller: this.listScroller }) {
           ForEach(this.messages, (msg: TaskMessage) => {
             ListItem() {
@@ -167,6 +139,36 @@ struct MainPage {
       .width('100%')
       .height('100%')
       .backgroundColor('#EDEDED')
+
+      // 下拉菜单 - 绝对定位
+      if (this.showMenu) {
+        Column() {
+          MenuButtonItem({ text: '扫一扫', onMenuClick: () => {
+            this.showMenu = false
+            router.pushUrl({ url: 'pages/ScanPage' })
+          }})
+          
+          Divider().color('#EEEEEE').height(0.5)
+          
+          MenuButtonItem({ text: '文件', onMenuClick: () => {
+            this.showMenu = false
+            this.showFilesPanel = true
+          }})
+          
+          Divider().color('#EEEEEE').height(0.5)
+          
+          MenuButtonItem({ text: '设置', onMenuClick: () => {
+            this.showMenu = false
+          }})
+        }
+        .width(100)
+        .backgroundColor('#FFFFFF')
+        .borderRadius(6)
+        .shadow({ radius: 3, color: '#00000033', offsetY: 1 })
+        .position({ x: '100%', y: 44 })
+        .translate({ x: -112 })
+        .zIndex(100)
+      }
 
       // 权限弹窗
       if (this.showPermissionDialog) {
