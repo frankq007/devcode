@@ -217,12 +217,12 @@ struct MainPage {
             this.showMenu = false
           }})
         }
-        .width(120)
+        .width(108)
         .backgroundColor('#FFFFFF')
         .borderRadius(12)
         .shadow({ radius: 8, color: '#1A000000', offsetY: 2 })
         .position({ x: '100%', y: 56 })
-        .translate({ x: -128 })
+        .translate({ x: -116 })
         .zIndex(100)
       }
 
