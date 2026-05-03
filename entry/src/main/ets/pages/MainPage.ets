@@ -37,7 +37,7 @@ struct MainPage {
   @State showMenu: boolean = false;
   @State showFilesPanel: boolean = false;
   @State keyboardHeight: number = 0;
-  @State isVoiceMode: boolean = false;
+  @State isVoiceMode: boolean = true;
   @State isRecording: boolean = false;
   private listScroller: Scroller = new Scroller();
   private windowClass: window.Window | null = null;
@@ -133,15 +133,15 @@ struct MainPage {
         // 输入区域 - 固定在底部
         Column() {
           Row() {
-            // 切换按钮 - 麦克风/键盘
+            // 切换按钮 - 麦克风/键盘（显示当前模式）
             Button() {
               if (this.isVoiceMode) {
+                Text('🎤')
+                  .fontSize(20)
+              } else {
                 Text('⌨')
                   .fontSize(20)
                   .fontColor('#182431')
-              } else {
-                Text('🎤')
-                  .fontSize(20)
               }
             }
             .width(44)
