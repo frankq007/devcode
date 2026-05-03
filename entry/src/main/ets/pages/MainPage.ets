@@ -133,15 +133,15 @@ struct MainPage {
         // 输入区域 - 固定在底部
         Column() {
           Row() {
-            // 切换按钮 - 麦克风/键盘（显示当前模式）
+            // 切换按钮 - 显示切换后的目标模式图标
             Button() {
               if (this.isVoiceMode) {
-                Text('🎤')
-                  .fontSize(20)
-              } else {
                 Text('⌨')
                   .fontSize(20)
                   .fontColor('#182431')
+              } else {
+                Text('🎤')
+                  .fontSize(20)
               }
             }
             .width(44)
