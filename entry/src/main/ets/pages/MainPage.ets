@@ -2,7 +2,7 @@
  * 主控页面 - 微信风格气泡对话
  */
 
-import { router, KeyboardAvoidMode } from '@kit.ArkUI';
+import { router, KeyboardAvoidMode, window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { wsService } from '../common/WebSocketService';
 import { PermissionDialog } from '../components/PermissionDialog';
@@ -36,10 +36,23 @@ struct MainPage {
   @State lastAiMessageId: string = '';
   @State showMenu: boolean = false;
   @State showFilesPanel: boolean = false;
+  @State keyboardHeight: number = 0;
   private listScroller: Scroller = new Scroller();
+  private windowClass: window.Window | null = null;
 
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+    
+    try {
+      window.getLastWindow(this.getUIContext().getHostContext()).then((win: window.Window) => {
+        this.windowClass = win;
+        win.on('keyboardHeightChange', (height: number) => {
+          this.keyboardHeight = this.getUIContext().px2vp(height);
+        });
+      });
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Failed to get window: %{public}s', JSON.stringify(e));
+    }
     
     this.connectionStatus = '正在连接...';
     wsService.connect(DEBUG_CONFIG).then((success: boolean) => {
@@ -55,6 +68,12 @@ struct MainPage {
     wsService.onStatusChange((connected: boolean) => {
       this.connectionStatus = connected ? '已连接' : '已断开';
     });
+  }
+
+  aboutToDisappear(): void {
+    if (this.windowClass) {
+      this.windowClass.off('keyboardHeightChange');
+    }
   }
 
   build() {
@@ -136,27 +155,29 @@ struct MainPage {
           .width('100%')
           .padding({ left: 12, right: 12, top: 8, bottom: 8 })
 
-          // 程序员常用输入键行 - 输入框下方，软键盘上方
-          Row() {
-            ForEach(['/', '-', '+', '_', '!'], (key: string) => {
-              Button(key)
-                .width(40)
-                .height(36)
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .backgroundColor('#FFFFFF')
-                .fontColor('#333333')
-                .borderRadius(6)
-                .margin({ left: 4, right: 4 })
-                .onClick(() => {
-                  this.inputText += key
-                })
-            }, (key: string) => key)
+          // 程序员常用输入键行 - 键盘弹出时显示
+          if (this.keyboardHeight > 0) {
+            Row() {
+              ForEach(['/', '-', '+', '_', '!'], (key: string) => {
+                Button(key)
+                  .width(40)
+                  .height(36)
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Medium)
+                  .backgroundColor('#FFFFFF')
+                  .fontColor('#333333')
+                  .borderRadius(6)
+                  .margin({ left: 4, right: 4 })
+                  .onClick(() => {
+                    this.inputText += key
+                  })
+              }, (key: string) => key)
+            }
+            .width('100%')
+            .height(40)
+            .padding({ left: 8, right: 8 })
+            .justifyContent(FlexAlign.Center)
           }
-          .width('100%')
-          .height(40)
-          .padding({ left: 8, right: 8 })
-          .justifyContent(FlexAlign.Center)
         }
         .width('100%')
         .backgroundColor('#F7F7F7')
