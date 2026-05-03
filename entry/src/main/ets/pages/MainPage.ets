@@ -6,6 +6,7 @@ import { router, KeyboardAvoidMode } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { wsService } from '../common/WebSocketService';
 import { PermissionDialog } from '../components/PermissionDialog';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { FileInfo, TaskMessage, ConnectionConfig } from '../common/Types';
 
 const DOMAIN = 0xFF00;
@@ -420,7 +421,7 @@ struct ChatBubble {
         }
         .width('100%')
       } else {
-        // AI消息 - 左对齐
+        // AI消息 - 左对齐，使用 Markdown 渲染
         Row() {
           Column() {
             if (this.message.status === 'running') {
@@ -430,11 +431,7 @@ struct ChatBubble {
               }
               .padding({ left: 12, right: 12, top: 8, bottom: 8 })
             } else {
-              Text(this.message.content)
-                .fontSize(16)
-                .fontColor('#333333')
-                .maxLines(100)
-                .textOverflow({ overflow: TextOverflow.Clip })
+              MarkdownRenderer({ content: this.message.content })
                 .padding({ left: 12, right: 12, top: 8, bottom: 8 })
             }
           }
