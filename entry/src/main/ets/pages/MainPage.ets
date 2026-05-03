@@ -1,5 +1,5 @@
 /**
- * 主控页面
+ * 主控页面 - 微信风格气泡对话
  */
 
 import { router } from '@kit.ArkUI';
@@ -32,22 +32,16 @@ struct MainPage {
   @State connectionStatus: string = '连接中...';
   @State serverIp: string = DEBUG_CONFIG.ip;
   @State httpPort: number = DEBUG_CONFIG.httpPort;
-  @State isRecording: boolean = false;
   @State lastAiMessageId: string = '';
   @State showMenu: boolean = false;
   @State showFilesPanel: boolean = false;
+  @State listScroller: Scroller = new Scroller();
 
   aboutToAppear(): void {
-    hilog.info(DOMAIN, TAG, '=== MainPage aboutToAppear ===');
-
     this.connectionStatus = '正在连接...';
     wsService.connect(DEBUG_CONFIG).then((success: boolean) => {
-      if (success) {
-        this.connectionStatus = '已连接';
-      } else {
-        this.connectionStatus = '连接失败';
-      }
-    }).catch((e: Error) => {
+      this.connectionStatus = success ? '已连接' : '连接失败';
+    }).catch(() => {
       this.connectionStatus = '连接错误';
     });
 
@@ -63,7 +57,7 @@ struct MainPage {
   build() {
     Stack() {
       Column() {
-        // 顶部标题栏
+        // 顶部标题栏 - 固定高度
         Row() {
           Blank()
           
@@ -74,136 +68,105 @@ struct MainPage {
           
           Blank()
           
-          // 圆圈加号按钮
           Stack() {
             Circle()
-              .width(32)
-              .height(32)
+              .width(28)
+              .height(28)
               .fill('#FFFFFF')
               .stroke('#4CAF50')
-              .strokeWidth(2)
+              .strokeWidth(1.5)
             
             Text('+')
-              .fontSize(20)
+              .fontSize(18)
               .fontWeight(FontWeight.Bold)
               .fontColor('#4CAF50')
           }
-          .width(32)
-          .height(32)
+          .width(28)
+          .height(28)
           .onClick(() => {
             this.showMenu = !this.showMenu
           })
         }
         .width('100%')
-        .height(50)
-        .padding({ left: 16, right: 16 })
+        .height(44)
+        .padding({ left: 12, right: 12 })
         .backgroundColor('#FFFFFF')
-        .shadow({ radius: 2, color: '#EEEEEE', offsetY: 2 })
 
         // 下拉菜单
         if (this.showMenu) {
           Column() {
-            Text('扫一扫')
-              .fontSize(16)
-              .padding(12)
-              .width('100%')
-              .textAlign(TextAlign.Center)
-              .onClick(() => {
-                this.showMenu = false
-                router.pushUrl({ url: 'pages/ScanPage' })
-              })
-
-            Divider().color('#EEEEEE')
-
-            Text('文件')
-              .fontSize(16)
-              .padding(12)
-              .width('100%')
-              .textAlign(TextAlign.Center)
-              .onClick(() => {
-                this.showMenu = false
-                this.showFilesPanel = true
-              })
-
-            Divider().color('#EEEEEE')
-
-            Text('设置')
-              .fontSize(16)
-              .padding(12)
-              .width('100%')
-              .textAlign(TextAlign.Center)
-              .onClick(() => {
-                this.showMenu = false
-              })
+            MenuItem({ text: '扫一扫', onClick: () => {
+              this.showMenu = false
+              router.pushUrl({ url: 'pages/ScanPage' })
+            }})
+            
+            Divider().color('#EEEEEE').height(0.5)
+            
+            MenuItem({ text: '文件', onClick: () => {
+              this.showMenu = false
+              this.showFilesPanel = true
+            }})
+            
+            Divider().color('#EEEEEE').height(0.5)
+            
+            MenuItem({ text: '设置', onClick: () => {
+              this.showMenu = false
+            }})
           }
-          .width(120)
+          .width(100)
           .backgroundColor('#FFFFFF')
-          .borderRadius(8)
-          .shadow({ radius: 4, color: '#CCCCCC', offsetY: 2 })
-          .position({ x: '100%', y: 50 })
-          .translate({ x: -136 })
-          .zIndex(10)
+          .borderRadius(6)
+          .shadow({ radius: 3, color: '#00000033', offsetY: 1 })
+          .position({ x: '100%', y: 44 })
+          .translate({ x: -112 })
+          .zIndex(100)
         }
 
-        // 连接状态指示
-        Row() {
-          Circle()
-            .width(8)
-            .height(8)
-            .fill(this.connectionStatus === '已连接' ? '#4CAF50' : '#FF5722')
-          
-          Text(this.connectionStatus)
-            .fontSize(12)
-            .fontColor('#888888')
-            .margin({ left: 4 })
-        }
-        .width('100%')
-        .padding({ left: 16, top: 8, bottom: 8 })
-        .backgroundColor('#F5F5F5')
-
-        // 消息列表 - 填满剩余空间
-        List() {
+        // 消息列表
+        List({ scroller: this.listScroller }) {
           ForEach(this.messages, (msg: TaskMessage) => {
             ListItem() {
-              MessageItem({ message: msg })
+              ChatBubble({ message: msg })
             }
           }, (msg: TaskMessage) => msg.id)
         }
         .width('100%')
         .layoutWeight(1)
-        .backgroundColor('#F5F5F5')
-        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .backgroundColor('#EDEDED')
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .scrollBar(BarState.Off)
 
-        // 输入区域
+        // 输入区域 - 固定在底部
         Row() {
           TextInput({ placeholder: '输入指令...', text: this.inputText })
             .layoutWeight(1)
-            .height(44)
+            .height(40)
             .backgroundColor('#FFFFFF')
-            .borderRadius(22)
-            .padding({ left: 16, right: 16 })
+            .borderRadius(20)
+            .padding({ left: 14, right: 14 })
             .onChange((value: string) => {
               this.inputText = value
             })
 
           Button('发送')
-            .width(70)
-            .height(44)
-            .backgroundColor('#4CAF50')
-            .borderRadius(22)
+            .width(60)
+            .height(40)
+            .fontSize(14)
+            .backgroundColor('#07C160')
+            .borderRadius(20)
             .margin({ left: 8 })
             .onClick(() => {
               this.sendCommand()
             })
         }
         .width('100%')
+        .height(56)
         .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .backgroundColor('#FFFFFF')
-        .shadow({ radius: 2, color: '#EEEEEE', offsetY: -2 })
+        .backgroundColor('#F7F7F7')
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('#F5F5F5')
+      .backgroundColor('#EDEDED')
 
       // 权限弹窗
       if (this.showPermissionDialog) {
@@ -211,18 +174,10 @@ struct MainPage {
           requestId: this.currentPermissionId,
           command: this.currentPermissionCommand,
           explanation: this.currentPermissionExplanation,
-          onAllow: () => {
-            this.replyPermission('y')
-          },
-          onDeny: () => {
-            this.replyPermission('n')
-          },
-          onModify: (newCmd: string) => {
-            this.replyPermission(newCmd)
-          },
-          onClose: () => {
-            this.showPermissionDialog = false
-          }
+          onAllow: () => { this.replyPermission('y') },
+          onDeny: () => { this.replyPermission('n') },
+          onModify: (newCmd: string) => { this.replyPermission(newCmd) },
+          onClose: () => { this.showPermissionDialog = false }
         })
       }
 
@@ -231,20 +186,19 @@ struct MainPage {
         Column() {
           Row() {
             Text('文件')
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
+              .fontSize(17)
+              .fontWeight(FontWeight.Medium)
             
             Blank()
             
             Text('关闭')
               .fontSize(16)
-              .fontColor('#4CAF50')
-              .onClick(() => {
-                this.showFilesPanel = false
-              })
+              .fontColor('#07C160')
+              .onClick(() => { this.showFilesPanel = false })
           }
           .width('100%')
-          .padding(16)
+          .height(44)
+          .padding({ left: 16, right: 16 })
           .backgroundColor('#FFFFFF')
 
           if (this.files.length > 0) {
@@ -257,7 +211,7 @@ struct MainPage {
             }
             .width('100%')
             .layoutWeight(1)
-            .backgroundColor('#F5F5F5')
+            .backgroundColor('#F7F7F7')
           } else {
             Column() {
               Text('暂无文件')
@@ -267,16 +221,16 @@ struct MainPage {
             .width('100%')
             .layoutWeight(1)
             .justifyContent(FlexAlign.Center)
-            .backgroundColor('#F5F5F5')
+            .backgroundColor('#F7F7F7')
           }
         }
         .width('100%')
-        .height('70%')
+        .height('75%')
         .backgroundColor('#FFFFFF')
-        .position({ x: 0, y: '30%' })
-        .borderRadius({ topLeft: 16, topRight: 16 })
-        .shadow({ radius: 8, color: '#CCCCCC', offsetY: -4 })
-        .zIndex(20)
+        .position({ x: 0, y: '25%' })
+        .borderRadius({ topLeft: 12, topRight: 12 })
+        .shadow({ radius: 6, color: '#00000022', offsetY: -3 })
+        .zIndex(50)
       }
     }
     .width('100%')
@@ -294,10 +248,6 @@ struct MainPage {
       this.handlePermissionRequest(msg)
     } else if (msgType === 'file_added') {
       this.handleFileAdded(msg)
-    } else if (msgType === 'file_updated') {
-      this.handleFileUpdated(msg)
-    } else if (msgType === 'file_removed') {
-      this.handleFileRemoved(msg)
     } else if (msgType === 'file_list') {
       this.handleFileList(msg)
     } else if (msgType === 'error') {
@@ -311,16 +261,6 @@ struct MainPage {
     
     this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
     
-    if (messageId.length > 0 && messageId === this.lastAiMessageId) {
-      for (let i = 0; i < this.messages.length; i++) {
-        if (this.messages[i].id === 'ai-' + messageId) {
-          this.messages[i].content = content
-          this.messages[i].status = 'completed'
-          return
-        }
-      }
-    }
-    
     const newMsg: TaskMessage = {
       id: 'ai-' + messageId,
       type: 'ai',
@@ -330,23 +270,26 @@ struct MainPage {
     }
     this.messages.push(newMsg)
     this.lastAiMessageId = messageId
+    
+    setTimeout(() => {
+      this.listScroller.scrollEdge(Edge.Bottom)
+    }, 100)
   }
 
   handleTaskStatus(msg: ESObject): void {
     const statusStr: string = msg['status'] as string
-    const messageText: string = msg['message'] as string || ''
     
     if (statusStr === 'running') {
       this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
       const newMsg: TaskMessage = {
         id: 'status-running',
-        type: 'system',
-        content: messageText.length > 0 ? messageText : '正在处理...',
+        type: 'ai',
+        content: '正在处理...',
         timestamp: Date.now(),
         status: 'running'
       }
       this.messages.push(newMsg)
-    } else if (statusStr === 'idle' || statusStr === 'ready' || statusStr === 'completed') {
+    } else if (statusStr === 'idle' || statusStr === 'ready') {
       this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
     }
   }
@@ -356,15 +299,6 @@ struct MainPage {
     this.currentPermissionCommand = msg['command'] as string
     this.currentPermissionExplanation = msg['explanation'] as string || '需要授权'
     this.showPermissionDialog = true
-    
-    const permMsg: TaskMessage = {
-      id: 'perm-' + this.currentPermissionId,
-      type: 'permission',
-      content: '需要授权: ' + this.currentPermissionCommand,
-      timestamp: Date.now(),
-      status: 'pending'
-    }
-    this.messages.push(permMsg)
   }
 
   handleFileAdded(msg: ESObject): void {
@@ -376,27 +310,6 @@ struct MainPage {
       url: msg['url'] as string
     }
     this.files.push(file)
-  }
-
-  handleFileUpdated(msg: ESObject): void {
-    const filename: string = msg['filename'] as string
-    for (let i = 0; i < this.files.length; i++) {
-      if (this.files[i].path === filename) {
-        this.files[i] = {
-          name: filename,
-          path: filename,
-          size: msg['size'] as number,
-          modified: msg['modified'] as string,
-          url: msg['url'] as string
-        }
-        break
-      }
-    }
-  }
-
-  handleFileRemoved(msg: ESObject): void {
-    const filename: string = msg['filename'] as string
-    this.files = this.files.filter((f: FileInfo) => f.path !== filename)
   }
 
   handleFileList(msg: ESObject): void {
@@ -419,7 +332,7 @@ struct MainPage {
   handleError(msg: ESObject): void {
     const errMsg: TaskMessage = {
       id: 'err-' + Date.now().toString(),
-      type: 'system',
+      type: 'ai',
       content: '错误: ' + (msg['message'] as string || '未知错误'),
       timestamp: Date.now(),
       status: 'error'
@@ -428,9 +341,7 @@ struct MainPage {
   }
 
   sendCommand(): void {
-    if (this.inputText.trim().length === 0) {
-      return
-    }
+    if (this.inputText.trim().length === 0) return
 
     const userMsg: TaskMessage = {
       id: 'user-' + Date.now().toString(),
@@ -442,93 +353,105 @@ struct MainPage {
     this.messages.push(userMsg)
     wsService.execCommand(this.inputText)
     this.inputText = ''
+    
+    setTimeout(() => {
+      this.listScroller.scrollEdge(Edge.Bottom)
+    }, 100)
   }
 
   replyPermission(answer: string): void {
     if (this.currentPermissionId.length > 0) {
       wsService.replyPermission(this.currentPermissionId, answer)
       this.showPermissionDialog = false
-      
-      const permMsgId: string = 'perm-' + this.currentPermissionId
-      for (let i = 0; i < this.messages.length; i++) {
-        if (this.messages[i].id === permMsgId) {
-          this.messages[i].status = answer === 'y' ? 'completed' : 'error'
-          break
-        }
-      }
     }
   }
 }
 
+// 菜单项组件
 @Component
-struct MessageItem {
+struct MenuItem {
+  @Prop text: string = ''
+  onClick: () => void = () => {}
+
+  build() {
+    Text(this.text)
+      .fontSize(15)
+      .fontColor('#333333')
+      .padding({ top: 10, bottom: 10, left: 12, right: 12 })
+      .width('100%')
+      .textAlign(TextAlign.Center)
+      .onClick(() => { this.onClick() })
+  }
+}
+
+// 聊天气泡组件 - 微信风格
+@Component
+struct ChatBubble {
   @Prop message: TaskMessage
 
   build() {
     Column() {
-      Row() {
-        if (this.message.type === 'user') {
-          Text('我')
-            .fontSize(14)
-            .fontColor('#FFFFFF')
-        } else {
-          Text('AI')
-            .fontSize(14)
-            .fontColor('#FFFFFF')
-        }
-      }
-      .width(36)
-      .height(36)
-      .borderRadius(18)
-      .backgroundColor(this.message.type === 'user' ? '#4CAF50' : '#2196F3')
-      .justifyContent(FlexAlign.Center)
-
-      Column() {
-        Text(this.message.content)
-          .fontSize(15)
-          .fontColor('#333333')
-          .maxLines(20)
-          .textOverflow({ overflow: TextOverflow.Clip })
-
-        if (this.message.status === 'running') {
-          Row() {
-            LoadingProgress()
-              .width(16)
-              .height(16)
-              .color('#4CAF50')
+      if (this.message.type === 'user') {
+        // 用户消息 - 右对齐
+        Row() {
+          Blank()
+          
+          Column() {
+            Text(this.message.content)
+              .fontSize(16)
+              .fontColor('#FFFFFF')
+              .maxLines(100)
+              .textOverflow({ overflow: TextOverflow.Clip })
+              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
             
-            Text('正在处理...')
-              .fontSize(12)
-              .fontColor('#888888')
-              .margin({ left: 4 })
+            if (this.message.status === 'running') {
+              Row() {
+                LoadingProgress().width(14).height(14).color('#FFFFFF')
+                Text('发送中').fontSize(12).fontColor('#FFFFFF').margin({ left: 4 })
+              }.margin({ top: 4, bottom: 4 })
+            }
           }
-          .margin({ top: 4 })
-        } else {
-          Text(this.formatTime(this.message.timestamp))
-            .fontSize(12)
-            .fontColor('#AAAAAA')
-            .margin({ top: 4 })
+          .backgroundColor('#07C160')
+          .borderRadius(6)
+          .constraintSize({ minWidth: 40, maxWidth: '70%' })
+          .alignItems(HorizontalAlign.Start)
         }
+        .width('100%')
+      } else {
+        // AI消息 - 左对齐
+        Row() {
+          Column() {
+            if (this.message.status === 'running') {
+              Row() {
+                LoadingProgress().width(14).height(14).color('#07C160')
+                Text(this.message.content).fontSize(14).fontColor('#888888').margin({ left: 4 })
+              }
+              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            } else {
+              Text(this.message.content)
+                .fontSize(16)
+                .fontColor('#333333')
+                .maxLines(100)
+                .textOverflow({ overflow: TextOverflow.Clip })
+                .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            }
+          }
+          .backgroundColor('#FFFFFF')
+          .borderRadius(6)
+          .constraintSize({ minWidth: 40, maxWidth: '70%' })
+          .alignItems(HorizontalAlign.Start)
+          
+          Blank()
+        }
+        .width('100%')
       }
-      .margin({ left: 8 })
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .padding({ top: 8, bottom: 8, left: 12, right: 12 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(12)
     .margin({ top: 4, bottom: 4 })
-  }
-
-  formatTime(timestamp: number): string {
-    const date: Date = new Date(timestamp)
-    const hours: number = date.getHours()
-    const minutes: number = date.getMinutes()
-    return (hours < 10 ? '0' : '') + hours.toString() + ':' + (minutes < 10 ? '0' : '') + minutes.toString()
   }
 }
 
+// 文件项组件
 @Component
 struct FileItem {
   @Prop file: FileInfo
@@ -537,8 +460,7 @@ struct FileItem {
 
   build() {
     Row() {
-      Text(this.getFileIcon())
-        .fontSize(24)
+      Text(this.getFileIcon()).fontSize(22)
 
       Column() {
         Text(this.file.name)
@@ -551,41 +473,32 @@ struct FileItem {
           .fontSize(12)
           .fontColor('#888888')
       }
-      .margin({ left: 12 })
+      .margin({ left: 10 })
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
       Button('查看')
-        .width(60)
-        .height(32)
-        .fontSize(14)
-        .backgroundColor('#4CAF50')
-        .onClick(() => {
-          this.openFile()
-        })
+        .width(50)
+        .height(28)
+        .fontSize(13)
+        .backgroundColor('#07C160')
+        .onClick(() => { this.openFile() })
     }
     .width('100%')
-    .padding(12)
+    .padding(10)
     .backgroundColor('#FFFFFF')
-    .borderRadius(8)
-    .margin({ top: 4, bottom: 4 })
+    .borderRadius(6)
+    .margin({ top: 3, bottom: 3 })
   }
 
   getFileIcon(): string {
     const name: string = this.file.name.toLowerCase()
-    if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.gif')) {
-      return '🖼'
-    } else if (name.endsWith('.md') || name.endsWith('.txt')) {
-      return '📄'
-    } else if (name.endsWith('.json')) {
-      return '📋'
-    } else if (name.endsWith('.pdf')) {
-      return '📑'
-    } else if (name.endsWith('.zip')) {
-      return '📦'
-    } else {
-      return '📁'
-    }
+    if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) return '🖼'
+    if (name.endsWith('.md') || name.endsWith('.txt')) return '📄'
+    if (name.endsWith('.json')) return '📋'
+    if (name.endsWith('.pdf')) return '📑'
+    if (name.endsWith('.zip')) return '📦'
+    return '📁'
   }
 
   openFile(): void {
@@ -593,12 +506,8 @@ struct FileItem {
   }
 
   formatSize(size: number): string {
-    if (size < 1024) {
-      return size.toString() + ' B'
-    } else if (size < 1024 * 1024) {
-      return (size / 1024).toFixed(1) + ' KB'
-    } else {
-      return (size / 1024 / 1024).toFixed(1) + ' MB'
-    }
+    if (size < 1024) return size.toString() + ' B'
+    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
+    return (size / 1024 / 1024).toFixed(1) + ' MB'
   }
 }
