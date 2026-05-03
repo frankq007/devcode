@@ -109,55 +109,56 @@ struct MainPage {
         .padding({ left: 12, right: 12, top: 8, bottom: 8 })
         .scrollBar(BarState.Off)
 
-        // 程序员常用输入键行
-        Row() {
-          ForEach(['/', '-', '+', '_', '!'], (key: string) => {
-            Button(key)
-              .width(40)
-              .height(36)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .backgroundColor('#FFFFFF')
-              .fontColor('#333333')
-              .borderRadius(6)
-              .margin({ left: 4, right: 4 })
-              .onClick(() => {
-                this.inputText += key
-              })
-          }, (key: string) => key)
-        }
-        .width('100%')
-        .height(40)
-        .padding({ left: 8, right: 8 })
-        .backgroundColor('#F7F7F7')
-        .justifyContent(FlexAlign.Center)
-
         // 输入区域 - 固定在底部
-        Row() {
-          TextInput({ placeholder: '输入指令...', text: this.inputText })
-            .layoutWeight(1)
-            .height(40)
-            .backgroundColor('#FFFFFF')
-            .borderRadius(20)
-            .padding({ left: 14, right: 14 })
-            .onChange((value: string) => {
-              this.inputText = value
-            })
+        Column() {
+          Row() {
+            TextInput({ placeholder: '输入指令...', text: this.inputText })
+              .layoutWeight(1)
+              .height(40)
+              .backgroundColor('#FFFFFF')
+              .borderRadius(20)
+              .padding({ left: 14, right: 14 })
+              .onChange((value: string) => {
+                this.inputText = value
+              })
 
-          Button('发送')
-            .width(60)
-            .height(40)
-            .fontSize(14)
-            .backgroundColor('#07C160')
-            .borderRadius(20)
-            .margin({ left: 8 })
-            .onClick(() => {
-              this.sendCommand()
-            })
+            Button('发送')
+              .width(60)
+              .height(40)
+              .fontSize(14)
+              .backgroundColor('#07C160')
+              .borderRadius(20)
+              .margin({ left: 8 })
+              .onClick(() => {
+                this.sendCommand()
+              })
+          }
+          .width('100%')
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+
+          // 程序员常用输入键行 - 输入框下方，软键盘上方
+          Row() {
+            ForEach(['/', '-', '+', '_', '!'], (key: string) => {
+              Button(key)
+                .width(40)
+                .height(36)
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .backgroundColor('#FFFFFF')
+                .fontColor('#333333')
+                .borderRadius(6)
+                .margin({ left: 4, right: 4 })
+                .onClick(() => {
+                  this.inputText += key
+                })
+            }, (key: string) => key)
+          }
+          .width('100%')
+          .height(40)
+          .padding({ left: 8, right: 8 })
+          .justifyContent(FlexAlign.Center)
         }
         .width('100%')
-        .height(56)
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
         .backgroundColor('#F7F7F7')
       }
       .width('100%')
