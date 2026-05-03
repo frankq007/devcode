@@ -1,5 +1,5 @@
 /**
- * 主控页面 - 微信风格气泡对话
+ * 主控页面 - HarmonyOS 设计风格
  */
 
 import { router, KeyboardAvoidMode, window } from '@kit.ArkUI';
@@ -84,9 +84,9 @@ struct MainPage {
           Blank()
           
           Text('DevCode')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#333333')
+            .fontSize(20)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#182431')
           
           Blank()
           
@@ -94,14 +94,14 @@ struct MainPage {
             Circle()
               .width(28)
               .height(28)
-              .fill('#FFFFFF')
-              .stroke('#4CAF50')
-              .strokeWidth(1.5)
+              .fill($r('sys.color.comp_background_primary'))
+              .stroke('#007DFF')
+              .strokeWidth(2)
             
             Text('+')
               .fontSize(18)
               .fontWeight(FontWeight.Bold)
-              .fontColor('#4CAF50')
+              .fontColor('#007DFF')
           }
           .width(28)
           .height(28)
@@ -110,8 +110,8 @@ struct MainPage {
           })
         }
         .width('100%')
-        .height(44)
-        .padding({ left: 12, right: 12 })
+        .height(56)
+        .padding({ left: 16, right: 16 })
         .backgroundColor('#FFFFFF')
 
         // 消息列表 - layoutWeight(1) 自动压缩
@@ -124,8 +124,8 @@ struct MainPage {
         }
         .width('100%')
         .layoutWeight(1)
-        .backgroundColor('#EDEDED')
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .backgroundColor('#F1F3F5')
+        .padding({ left: 16, right: 16, top: 8, bottom: 8 })
         .scrollBar(BarState.Off)
 
         // 输入区域 - 固定在底部
@@ -133,58 +133,60 @@ struct MainPage {
           Row() {
             TextInput({ placeholder: '输入指令...', text: this.inputText })
               .layoutWeight(1)
-              .height(40)
+              .height(44)
               .backgroundColor('#FFFFFF')
-              .borderRadius(20)
-              .padding({ left: 14, right: 14 })
+              .borderRadius(22)
+              .placeholderColor('#99182431')
+              .padding({ left: 16, right: 16 })
               .onChange((value: string) => {
                 this.inputText = value
               })
 
             Button('发送')
-              .width(60)
-              .height(40)
+              .width(64)
+              .height(44)
               .fontSize(14)
-              .backgroundColor('#07C160')
-              .borderRadius(20)
-              .margin({ left: 8 })
+              .fontColor(Color.White)
+              .backgroundColor('#007DFF')
+              .borderRadius(22)
+              .margin({ left: 12 })
               .onClick(() => {
                 this.sendCommand()
               })
           }
           .width('100%')
-          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .padding({ left: 16, right: 16, top: 8, bottom: 8 })
 
           // 程序员常用输入键行 - 键盘弹出时显示
           if (this.keyboardHeight > 0) {
             Row() {
               ForEach(['/', '-', '+', '_', '!'], (key: string) => {
                 Button(key)
-                  .width(40)
-                  .height(36)
+                  .width(44)
+                  .height(40)
                   .fontSize(16)
                   .fontWeight(FontWeight.Medium)
                   .backgroundColor('#FFFFFF')
-                  .fontColor('#333333')
-                  .borderRadius(6)
-                  .margin({ left: 4, right: 4 })
+                  .fontColor('#182431')
+                  .borderRadius(8)
+                  .margin({ left: 6, right: 6 })
                   .onClick(() => {
                     this.inputText += key
                   })
               }, (key: string) => key)
             }
             .width('100%')
-            .height(40)
-            .padding({ left: 8, right: 8 })
+            .height(48)
+            .padding({ left: 16, right: 16 })
             .justifyContent(FlexAlign.Center)
           }
         }
         .width('100%')
-        .backgroundColor('#F7F7F7')
+        .backgroundColor('#F5F5F5')
       }
       .width('100%')
       .height('100%')
-      .backgroundColor('#EDEDED')
+      .backgroundColor('#F1F3F5')
 
       // 下拉菜单 - 绝对定位
       if (this.showMenu) {
@@ -194,14 +196,14 @@ struct MainPage {
             router.pushUrl({ url: 'pages/ScanPage' })
           }})
           
-          Divider().color('#EEEEEE').height(0.5)
+          Divider().strokeWidth(0.5).color('#05182431')
           
           MenuButtonItem({ text: '文件', onMenuClick: () => {
             this.showMenu = false
             this.showFilesPanel = true
           }})
           
-          Divider().color('#EEEEEE').height(0.5)
+          Divider().strokeWidth(0.5).color('#05182431')
           
           MenuButtonItem({ text: '设置', onMenuClick: () => {
             this.showMenu = false
@@ -209,9 +211,9 @@ struct MainPage {
         }
         .width(100)
         .backgroundColor('#FFFFFF')
-        .borderRadius(6)
-        .shadow({ radius: 3, color: '#00000033', offsetY: 1 })
-        .position({ x: '100%', y: 44 })
+        .borderRadius(12)
+        .shadow({ radius: 8, color: '#1A000000', offsetY: 2 })
+        .position({ x: '100%', y: 56 })
         .translate({ x: -112 })
         .zIndex(100)
       }
@@ -423,16 +425,16 @@ struct MenuButtonItem {
 
   build() {
     Text(this.text)
-      .fontSize(15)
-      .fontColor('#333333')
-      .padding({ top: 10, bottom: 10, left: 12, right: 12 })
+      .fontSize(14)
+      .fontColor('#182431')
+      .padding({ top: 12, bottom: 12, left: 16, right: 16 })
       .width('100%')
       .textAlign(TextAlign.Center)
       .onClick(() => { this.onMenuClick() })
   }
 }
 
-// 聊天气泡组件 - 微信风格
+// 聊天气泡组件 - HarmonyOS 设计风格
 @Component
 struct ChatBubble {
   @Prop message: TaskMessage
@@ -447,20 +449,20 @@ struct ChatBubble {
           Column() {
             Text(this.message.content)
               .fontSize(16)
-              .fontColor('#FFFFFF')
+              .fontColor(Color.White)
               .maxLines(100)
               .textOverflow({ overflow: TextOverflow.Clip })
-              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
             
             if (this.message.status === 'running') {
               Row() {
-                LoadingProgress().width(14).height(14).color('#FFFFFF')
-                Text('发送中').fontSize(12).fontColor('#FFFFFF').margin({ left: 4 })
+                LoadingProgress().width(16).height(16).color(Color.White)
+                Text('发送中').fontSize(12).fontColor(Color.White).margin({ left: 6 })
               }.margin({ top: 4, bottom: 4 })
             }
           }
-          .backgroundColor('#07C160')
-          .borderRadius(6)
+          .backgroundColor('#007DFF')
+          .borderRadius(12)
           .constraintSize({ minWidth: 40, maxWidth: '70%' })
           .alignItems(HorizontalAlign.Start)
         }
@@ -471,19 +473,19 @@ struct ChatBubble {
           Column() {
             if (this.message.status === 'running') {
               Row() {
-                LoadingProgress().width(14).height(14).color('#07C160')
-                Text(this.message.content).fontSize(14).fontColor('#888888').margin({ left: 4 })
+                LoadingProgress().width(16).height(16).color('#007DFF')
+                Text(this.message.content).fontSize(14).fontColor('#99182431').margin({ left: 6 })
               }
-              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
               .width('100%')
             } else {
               MarkdownRenderer({ content: this.message.content })
                 .width('100%')
-                .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+                .padding({ left: 16, right: 16, top: 10, bottom: 10 })
             }
           }
           .backgroundColor('#FFFFFF')
-          .borderRadius(6)
+          .borderRadius(12)
           .width('85%')
           .alignItems(HorizontalAlign.Start)
           
@@ -493,7 +495,7 @@ struct ChatBubble {
       }
     }
     .width('100%')
-    .margin({ top: 4, bottom: 4 })
+    .margin({ top: 6, bottom: 6 })
   }
 }
 
