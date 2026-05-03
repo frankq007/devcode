@@ -188,8 +188,16 @@ struct MainPage {
       .height('100%')
       .backgroundColor('#F1F3F5')
 
-      // 下拉菜单 - 绝对定位
+      // 下拉菜单 - 绝对定位，点击外部关闭
       if (this.showMenu) {
+        // 透明遮罩层，点击关闭菜单
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor(Color.Transparent)
+          .onClick(() => { this.showMenu = false })
+          .zIndex(99)
+        
         Column() {
           MenuButtonItem({ text: '扫一扫', onMenuClick: () => {
             this.showMenu = false
@@ -198,7 +206,7 @@ struct MainPage {
           
           Divider().strokeWidth(0.5).color('#05182431')
           
-          MenuButtonItem({ text: '文件', onMenuClick: () => {
+          MenuButtonItem({ text: '文件传输', onMenuClick: () => {
             this.showMenu = false
             this.showFilesPanel = true
           }})
@@ -209,12 +217,12 @@ struct MainPage {
             this.showMenu = false
           }})
         }
-        .width(100)
+        .width(120)
         .backgroundColor('#FFFFFF')
         .borderRadius(12)
         .shadow({ radius: 8, color: '#1A000000', offsetY: 2 })
         .position({ x: '100%', y: 56 })
-        .translate({ x: -112 })
+        .translate({ x: -128 })
         .zIndex(100)
       }
 
@@ -429,7 +437,7 @@ struct MenuButtonItem {
       .fontColor('#182431')
       .padding({ top: 12, bottom: 12, left: 16, right: 16 })
       .width('100%')
-      .textAlign(TextAlign.Center)
+      .textAlign(TextAlign.Start)
       .onClick(() => { this.onMenuClick() })
   }
 }
