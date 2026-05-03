@@ -401,13 +401,19 @@ struct MainPage {
 
   handleFileList(msg: ESObject): void {
     const filesArray: ESObject[] = msg['files'] as ESObject[]
-    this.files = filesArray.map((f: ESObject) => ({
-      name: f['name'] as string,
-      path: f['path'] as string,
-      size: f['size'] as number,
-      modified: f['modified'] as string,
-      url: f['url'] as string
-    }))
+    const newFiles: FileInfo[] = []
+    for (let i = 0; i < filesArray.length; i++) {
+      const f: ESObject = filesArray[i]
+      const file: FileInfo = {
+        name: f['name'] as string,
+        path: f['path'] as string,
+        size: f['size'] as number,
+        modified: f['modified'] as string,
+        url: f['url'] as string
+      }
+      newFiles.push(file)
+    }
+    this.files = newFiles
   }
 
   handleError(msg: ESObject): void {
