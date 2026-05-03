@@ -430,14 +430,16 @@ struct ChatBubble {
                 Text(this.message.content).fontSize(14).fontColor('#888888').margin({ left: 4 })
               }
               .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .width('100%')
             } else {
               MarkdownRenderer({ content: this.message.content })
+                .width('100%')
                 .padding({ left: 12, right: 12, top: 8, bottom: 8 })
             }
           }
           .backgroundColor('#FFFFFF')
           .borderRadius(6)
-          .constraintSize({ minWidth: 40, maxWidth: '70%' })
+          .width('85%')
           .alignItems(HorizontalAlign.Start)
           
           Blank()

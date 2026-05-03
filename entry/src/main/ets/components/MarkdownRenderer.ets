@@ -20,23 +20,6 @@ export struct MarkdownRenderer {
       })
     }
     .width('100%')
-  }
-}
-
-@Component
-export struct SimpleMarkdownText {
-  @Prop content: string = '';
-  @Prop fontSize: number = 16;
-  @Prop fontColor: string = '#333333';
-  private controller: MarkdownController = new MarkdownController();
-
-  build() {
-    Column() {
-      Markdown({
-        text: this.content,
-        controller: this.controller
-      })
-    }
-    .width('100%')
+    .constraintSize({ minWidth: 40, maxWidth: '100%' })
   }
 }
