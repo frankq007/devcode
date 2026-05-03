@@ -8,6 +8,7 @@ import { wsService } from '../common/WebSocketService';
 import { PermissionDialog } from '../components/PermissionDialog';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { FileInfo, TaskMessage, ConnectionConfig } from '../common/Types';
+import { speechRecognizer } from '@kit.CoreSpeechKit';
 
 const DOMAIN = 0xFF00;
 const TAG = 'MainPage';
@@ -39,8 +40,14 @@ struct MainPage {
   @State keyboardHeight: number = 0;
   @State isVoiceMode: boolean = true;
   @State isRecording: boolean = false;
+  @State voiceButtonText: string = '按住说话';
+  @State recognizedText: string = '';
+  @State isCanceling: boolean = false;
   private listScroller: Scroller = new Scroller();
   private windowClass: window.Window | null = null;
+  private asrEngine: speechRecognizer.SpeechRecognitionEngine | null = null;
+  private sessionId: string = '';
+  private startY: number = 0;
 
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
@@ -55,6 +62,8 @@ struct MainPage {
     } catch (e) {
       hilog.error(DOMAIN, TAG, 'Failed to get window: %{public}s', JSON.stringify(e));
     }
+    
+    this.initSpeechRecognizer();
     
     this.connectionStatus = '正在连接...';
     wsService.connect(DEBUG_CONFIG).then((success: boolean) => {
@@ -75,6 +84,111 @@ struct MainPage {
   aboutToDisappear(): void {
     if (this.windowClass) {
       this.windowClass.off('keyboardHeightChange');
+    }
+    if (this.asrEngine) {
+      this.asrEngine.shutdown();
+    }
+  }
+
+  initSpeechRecognizer(): void {
+    const extraParams: Record<string, Object> = {
+      'locate': 'CN',
+      'recognizerMode': 'short'
+    };
+    const initParams: speechRecognizer.CreateEngineParams = {
+      language: 'zh-CN',
+      online: 1,
+      extraParams: extraParams
+    };
+
+    speechRecognizer.createEngine(initParams).then((engine: speechRecognizer.SpeechRecognitionEngine) => {
+      this.asrEngine = engine;
+      hilog.info(DOMAIN, TAG, 'Speech recognizer engine created');
+      this.setupRecognitionListener();
+    }).catch((err: Error) => {
+      hilog.error(DOMAIN, TAG, 'Failed to create engine: %{public}s', err.message);
+    });
+  }
+
+  setupRecognitionListener(): void {
+    if (!this.asrEngine) return;
+
+    const listener: speechRecognizer.RecognitionListener = {
+      onStart: (sessionId: string, eventMessage: string) => {
+        hilog.info(DOMAIN, TAG, 'onStart: %{public}s', eventMessage);
+        this.voiceButtonText = '正在识别...';
+      },
+      onEvent: (sessionId: string, eventCode: number, eventMessage: string) => {
+        hilog.info(DOMAIN, TAG, 'onEvent: code=%{public}d, msg=%{public}s', eventCode, eventMessage);
+      },
+      onResult: (sessionId: string, result: speechRecognizer.SpeechRecognitionResult) => {
+        hilog.info(DOMAIN, TAG, 'onResult: %{public}s', result.result);
+        if (result.isFinal) {
+          this.recognizedText = result.result;
+        }
+      },
+      onComplete: (sessionId: string, eventMessage: string) => {
+        hilog.info(DOMAIN, TAG, 'onComplete: %{public}s', eventMessage);
+        this.isRecording = false;
+        this.voiceButtonText = '按住说话';
+        if (this.recognizedText.length > 0 && !this.isCanceling) {
+          this.inputText = this.recognizedText;
+          this.sendCommand();
+          this.recognizedText = '';
+        }
+        this.isCanceling = false;
+      },
+      onError: (sessionId: string, errorCode: number, errorMessage: string) => {
+        hilog.error(DOMAIN, TAG, 'onError: code=%{public}d, msg=%{public}s', errorCode, errorMessage);
+        this.isRecording = false;
+        this.voiceButtonText = '按住说话';
+        this.isCanceling = false;
+      }
+    };
+
+    this.asrEngine.setListener(listener);
+  }
+
+  startVoiceRecognition(): void {
+    if (!this.asrEngine || this.asrEngine.isBusy()) {
+      hilog.warn(DOMAIN, TAG, 'Engine not ready or busy');
+      return;
+    }
+
+    this.sessionId = 'session-' + Date.now().toString();
+    this.recognizedText = '';
+    this.isCanceling = false;
+
+    const startParams: speechRecognizer.StartParams = {
+      sessionId: this.sessionId,
+      audioInfo: {
+        audioType: 'pcm',
+        sampleRate: 16000,
+        soundChannel: 1,
+        sampleBit: 16
+      },
+      extraParams: {
+        'recognitionMode': 0,
+        'vadEnd': 2000
+      }
+    };
+
+    this.asrEngine.startListening(startParams);
+    this.isRecording = true;
+    this.voiceButtonText = '松开结束';
+  }
+
+  stopVoiceRecognition(): void {
+    if (this.asrEngine && this.sessionId.length > 0) {
+      this.asrEngine.finish(this.sessionId);
+    }
+  }
+
+  cancelVoiceRecognition(): void {
+    if (this.asrEngine && this.sessionId.length > 0) {
+      this.isCanceling = true;
+      this.asrEngine.cancel(this.sessionId);
+      this.voiceButtonText = '已取消';
     }
   }
 
@@ -157,8 +271,8 @@ struct MainPage {
             })
 
             if (this.isVoiceMode) {
-              // 语音模式 - 按住说话按钮
-              Button(this.isRecording ? '松开结束' : '按住说话')
+              // 语音模式 - 按住说话按钮，支持向上滑动取消
+              Button(this.voiceButtonText)
                 .layoutWeight(1)
                 .height(44)
                 .fontSize(16)
@@ -166,15 +280,26 @@ struct MainPage {
                 .backgroundColor(this.isRecording ? '#007DFF' : '#FFFFFF')
                 .borderRadius(22)
                 .gesture(
-                  LongPressGesture({ repeat: false })
-                    .onAction(() => {
-                      this.isRecording = true
-                      hilog.info(DOMAIN, TAG, 'Start recording')
-                    })
-                    .onActionEnd(() => {
-                      this.isRecording = false
-                      hilog.info(DOMAIN, TAG, 'End recording')
-                    })
+                  GestureGroup(GestureMode.Parallel,
+                    PanGesture({ direction: PanDirection.Vertical })
+                      .onActionStart((event: GestureEvent) => {
+                        this.startY = event.offsetY;
+                      })
+                      .onActionUpdate((event: GestureEvent) => {
+                        if (this.isRecording && event.offsetY - this.startY < -100) {
+                          this.cancelVoiceRecognition();
+                        }
+                      }),
+                    LongPressGesture({ repeat: false, duration: 100 })
+                      .onAction(() => {
+                        this.startVoiceRecognition();
+                      })
+                      .onActionEnd(() => {
+                        if (!this.isCanceling) {
+                          this.stopVoiceRecognition();
+                        }
+                      })
+                  )
                 )
             } else {
               // 文本模式 - 输入框 + 发送按钮
