@@ -109,6 +109,29 @@ struct MainPage {
         .padding({ left: 12, right: 12, top: 8, bottom: 8 })
         .scrollBar(BarState.Off)
 
+        // 程序员常用输入键行
+        Row() {
+          ForEach(['/', '-', '+', '_', '!'], (key: string) => {
+            Button(key)
+              .width(40)
+              .height(36)
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+              .backgroundColor('#FFFFFF')
+              .fontColor('#333333')
+              .borderRadius(6)
+              .margin({ left: 4, right: 4 })
+              .onClick(() => {
+                this.inputText += key
+              })
+          }, (key: string) => key)
+        }
+        .width('100%')
+        .height(40)
+        .padding({ left: 8, right: 8 })
+        .backgroundColor('#F7F7F7')
+        .justifyContent(FlexAlign.Center)
+
         // 输入区域 - 固定在底部
         Row() {
           TextInput({ placeholder: '输入指令...', text: this.inputText })
