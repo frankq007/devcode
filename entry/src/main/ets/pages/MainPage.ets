@@ -37,6 +37,8 @@ struct MainPage {
   @State showMenu: boolean = false;
   @State showFilesPanel: boolean = false;
   @State keyboardHeight: number = 0;
+  @State isVoiceMode: boolean = false;
+  @State isRecording: boolean = false;
   private listScroller: Scroller = new Scroller();
   private windowClass: window.Window | null = null;
 
@@ -131,34 +133,80 @@ struct MainPage {
         // 输入区域 - 固定在底部
         Column() {
           Row() {
-            TextInput({ placeholder: '输入指令...', text: this.inputText })
-              .layoutWeight(1)
-              .height(44)
-              .backgroundColor('#FFFFFF')
-              .borderRadius(22)
-              .placeholderColor('#99182431')
-              .padding({ left: 16, right: 16 })
-              .onChange((value: string) => {
-                this.inputText = value
-              })
+            // 切换按钮 - 麦克风/键盘
+            Button() {
+              if (this.isVoiceMode) {
+                Text('⌨')
+                  .fontSize(20)
+                  .fontColor('#182431')
+              } else {
+                Text('🎤')
+                  .fontSize(20)
+              }
+            }
+            .width(44)
+            .height(44)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(22)
+            .margin({ right: 8 })
+            .onClick(() => {
+              this.isVoiceMode = !this.isVoiceMode
+              if (!this.isVoiceMode && this.windowClass) {
+                this.getUIContext().getFocusController().clearFocus()
+              }
+            })
 
-            Button('发送')
-              .width(64)
-              .height(44)
-              .fontSize(14)
-              .fontColor(Color.White)
-              .backgroundColor('#007DFF')
-              .borderRadius(22)
-              .margin({ left: 12 })
-              .onClick(() => {
-                this.sendCommand()
-              })
+            if (this.isVoiceMode) {
+              // 语音模式 - 按住说话按钮
+              Button(this.isRecording ? '松开结束' : '按住说话')
+                .layoutWeight(1)
+                .height(44)
+                .fontSize(16)
+                .fontColor(this.isRecording ? Color.White : '#182431')
+                .backgroundColor(this.isRecording ? '#007DFF' : '#FFFFFF')
+                .borderRadius(22)
+                .gesture(
+                  LongPressGesture({ repeat: false })
+                    .onAction(() => {
+                      this.isRecording = true
+                      hilog.info(DOMAIN, TAG, 'Start recording')
+                    })
+                    .onActionEnd(() => {
+                      this.isRecording = false
+                      hilog.info(DOMAIN, TAG, 'End recording')
+                    })
+                )
+            } else {
+              // 文本模式 - 输入框 + 发送按钮
+              TextInput({ placeholder: '输入指令...', text: this.inputText })
+                .layoutWeight(1)
+                .height(44)
+                .backgroundColor('#FFFFFF')
+                .borderRadius(22)
+                .placeholderColor('#99182431')
+                .padding({ left: 16, right: 16 })
+                .onChange((value: string) => {
+                  this.inputText = value
+                })
+
+              Button('发送')
+                .width(64)
+                .height(44)
+                .fontSize(14)
+                .fontColor(Color.White)
+                .backgroundColor('#007DFF')
+                .borderRadius(22)
+                .margin({ left: 12 })
+                .onClick(() => {
+                  this.sendCommand()
+                })
+            }
           }
           .width('100%')
           .padding({ left: 16, right: 16, top: 8, bottom: 8 })
 
-          // 程序员常用输入键行 - 键盘弹出时显示
-          if (this.keyboardHeight > 0) {
+          // 程序员常用输入键行 - 文本模式且键盘弹出时显示
+          if (!this.isVoiceMode && this.keyboardHeight > 0) {
             Row() {
               ForEach(['/', '-', '+', '_', '!'], (key: string) => {
                 Button(key)
