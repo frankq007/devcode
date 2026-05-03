@@ -1,17 +1,16 @@
 /**
- * 主控页面 (ArkTS 兼容版本)
+ * 主控页面
  */
- 
+
 import { router } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { wsService } from '../common/WebSocketService';
 import { PermissionDialog } from '../components/PermissionDialog';
 import type { FileInfo, TaskMessage, ConnectionConfig } from '../common/Types';
- 
+
 const DOMAIN = 0xFF00;
 const TAG = 'MainPage';
 
-// DEBUG: 固定配置 - 使用 ConnectionConfig 类型
 const DEBUG_CONFIG: ConnectionConfig = {
   ip: '100.117.37.34',
   wsPort: 8080,
@@ -35,69 +34,134 @@ struct MainPage {
   @State httpPort: number = DEBUG_CONFIG.httpPort;
   @State isRecording: boolean = false;
   @State lastAiMessageId: string = '';
+  @State showMenu: boolean = false;
+  @State showFilesPanel: boolean = false;
 
   aboutToAppear(): void {
-    hilog.info(DOMAIN, TAG, '=== MainPage aboutToAppear (DEBUG MODE) ===');
-    hilog.info(DOMAIN, TAG, 'Server IP: %{public}s', this.serverIp);
-    hilog.info(DOMAIN, TAG, 'HTTP Port: %{public}d', this.httpPort);
+    hilog.info(DOMAIN, TAG, '=== MainPage aboutToAppear ===');
 
-    // DEBUG: 直接连接
     this.connectionStatus = '正在连接...';
     wsService.connect(DEBUG_CONFIG).then((success: boolean) => {
-      hilog.info(DOMAIN, TAG, 'Connect result: %{public}s', success ? 'SUCCESS' : 'FAILED');
       if (success) {
-        this.connectionStatus = '已连接(调试模式)';
-        hilog.info(DOMAIN, TAG, 'WebSocket connected, waiting for auth...');
+        this.connectionStatus = '已连接';
       } else {
         this.connectionStatus = '连接失败';
-        hilog.error(DOMAIN, TAG, 'WebSocket connect failed');
       }
     }).catch((e: Error) => {
-      hilog.error(DOMAIN, TAG, 'Connect error: %{public}s', e.message);
-      this.connectionStatus = '连接错误: ' + e.message;
+      this.connectionStatus = '连接错误';
     });
 
     wsService.onMessage((msg: ESObject) => {
-      hilog.info(DOMAIN, TAG, '>>> Received WS message type: %{public}s', msg['type'] as string);
       this.handleMessage(msg);
     });
 
     wsService.onStatusChange((connected: boolean) => {
-      hilog.info(DOMAIN, TAG, '>>> Status changed: %{public}s', connected ? 'CONNECTED' : 'DISCONNECTED');
       this.connectionStatus = connected ? '已连接' : '已断开';
     });
-
-    hilog.info(DOMAIN, TAG, 'MainPage initialized (DEBUG)');
   }
- 
+
   build() {
     Stack() {
-      // 主内容
       Column() {
+        // 顶部标题栏
         Row() {
-          Text($r('app.string.main_title'))
-            .fontSize(20)
-            .fontWeight(FontWeight.Bold);
- 
           Blank()
- 
-          Row() {
+          
+          Text('DevCode')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#333333')
+          
+          Blank()
+          
+          // 圆圈加号按钮
+          Stack() {
             Circle()
-              .width(10)
-              .height(10)
-              .fill(this.connectionStatus === '已连接' ? '#4CAF50' : '#FF5722');
- 
-            Text(this.connectionStatus)
-              .fontSize(14)
-              .fontColor('#888888')
-              .margin({ left: 5 })
+              .width(32)
+              .height(32)
+              .fill('#FFFFFF')
+              .stroke('#4CAF50')
+              .strokeWidth(2)
+            
+            Text('+')
+              .fontSize(20)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#4CAF50')
           }
+          .width(32)
+          .height(32)
+          .onClick(() => {
+            this.showMenu = !this.showMenu
+          })
         }
         .width('100%')
         .height(50)
-        .padding({ left: 20, right: 20 })
+        .padding({ left: 16, right: 16 })
         .backgroundColor('#FFFFFF')
- 
+        .shadow({ radius: 2, color: '#EEEEEE', offsetY: 2 })
+
+        // 下拉菜单
+        if (this.showMenu) {
+          Column() {
+            Text('扫一扫')
+              .fontSize(16)
+              .padding(12)
+              .width('100%')
+              .textAlign(TextAlign.Center)
+              .onClick(() => {
+                this.showMenu = false
+                router.pushUrl({ url: 'pages/ScanPage' })
+              })
+
+            Divider().color('#EEEEEE')
+
+            Text('文件')
+              .fontSize(16)
+              .padding(12)
+              .width('100%')
+              .textAlign(TextAlign.Center)
+              .onClick(() => {
+                this.showMenu = false
+                this.showFilesPanel = true
+              })
+
+            Divider().color('#EEEEEE')
+
+            Text('设置')
+              .fontSize(16)
+              .padding(12)
+              .width('100%')
+              .textAlign(TextAlign.Center)
+              .onClick(() => {
+                this.showMenu = false
+              })
+          }
+          .width(120)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(8)
+          .shadow({ radius: 4, color: '#CCCCCC', offsetY: 2 })
+          .position({ x: '100%', y: 50 })
+          .translate({ x: -136 })
+          .zIndex(10)
+        }
+
+        // 连接状态指示
+        Row() {
+          Circle()
+            .width(8)
+            .height(8)
+            .fill(this.connectionStatus === '已连接' ? '#4CAF50' : '#FF5722')
+          
+          Text(this.connectionStatus)
+            .fontSize(12)
+            .fontColor('#888888')
+            .margin({ left: 4 })
+        }
+        .width('100%')
+        .padding({ left: 16, top: 8, bottom: 8 })
+        .backgroundColor('#F5F5F5')
+
+        // 消息列表 - 填满剩余空间
         List() {
           ForEach(this.messages, (msg: TaskMessage) => {
             ListItem() {
@@ -106,86 +170,42 @@ struct MainPage {
           }, (msg: TaskMessage) => msg.id)
         }
         .width('100%')
-        .height('50%')
+        .layoutWeight(1)
         .backgroundColor('#F5F5F5')
-        .divider({ strokeWidth: 1, color: '#EEEEEE', startMargin: 10, endMargin: 10 })
- 
-        Column() {
-          Text($r('app.string.files_title'))
-            .fontSize(16)
-            .fontWeight(FontWeight.Bold)
-            .margin({ bottom: 10 })
- 
-          if (this.files.length > 0) {
-            List() {
-              ForEach(this.files, (file: FileInfo) => {
-                ListItem() {
-                  FileItem({ file: file, serverIp: this.serverIp, httpPort: this.httpPort })
-                }
-              }, (file: FileInfo) => file.path)
-            }
-            .width('100%')
-            .height(120)
-            .backgroundColor('#FFFFFF')
-            .borderRadius(8)
-          } else {
-            Text('暂无文件')
-              .fontSize(14)
-              .fontColor('#888888')
-              .height(120)
-          }
-        }
-        .width('100%')
-        .padding(20)
-        .backgroundColor('#FFFFFF')
- 
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+
+        // 输入区域
         Row() {
-          Column() {
-            Image($r('app.media.startIcon'))
-              .width(30)
-              .height(30)
-              .fillColor(this.isRecording ? '#FF5722' : '#4CAF50')
- 
-            Text($r('app.string.voice_hint'))
-              .fontSize(12)
-              .fontColor(this.isRecording ? '#FF5722' : '#888888')
-          }
-          .width(60)
-          .height(60)
-          .borderRadius(8)
-          .backgroundColor('#EEEEEE')
-          .justifyContent(FlexAlign.Center)
-          .onClick(() => {
-            this.toggleRecording()
-          })
- 
           TextInput({ placeholder: '输入指令...', text: this.inputText })
-            .width('60%')
-            .height(50)
-            .margin({ left: 10 })
+            .layoutWeight(1)
+            .height(44)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(22)
+            .padding({ left: 16, right: 16 })
             .onChange((value: string) => {
               this.inputText = value
             })
- 
-          Button($r('app.string.send_command'))
-            .width('20%')
-            .height(50)
+
+          Button('发送')
+            .width(70)
+            .height(44)
             .backgroundColor('#4CAF50')
-            .margin({ left: 10 })
+            .borderRadius(22)
+            .margin({ left: 8 })
             .onClick(() => {
               this.sendCommand()
             })
         }
         .width('100%')
-        .height(80)
-        .padding({ left: 10, right: 10 })
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
         .backgroundColor('#FFFFFF')
+        .shadow({ radius: 2, color: '#EEEEEE', offsetY: -2 })
       }
       .width('100%')
       .height('100%')
       .backgroundColor('#F5F5F5')
- 
-      // 权限弹窗覆盖层
+
+      // 权限弹窗
       if (this.showPermissionDialog) {
         PermissionDialog({
           requestId: this.currentPermissionId,
@@ -205,28 +225,73 @@ struct MainPage {
           }
         })
       }
+
+      // 文件面板
+      if (this.showFilesPanel) {
+        Column() {
+          Row() {
+            Text('文件')
+              .fontSize(18)
+              .fontWeight(FontWeight.Bold)
+            
+            Blank()
+            
+            Text('关闭')
+              .fontSize(16)
+              .fontColor('#4CAF50')
+              .onClick(() => {
+                this.showFilesPanel = false
+              })
+          }
+          .width('100%')
+          .padding(16)
+          .backgroundColor('#FFFFFF')
+
+          if (this.files.length > 0) {
+            List() {
+              ForEach(this.files, (file: FileInfo) => {
+                ListItem() {
+                  FileItem({ file: file, serverIp: this.serverIp, httpPort: this.httpPort })
+                }
+              }, (file: FileInfo) => file.path)
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .backgroundColor('#F5F5F5')
+          } else {
+            Column() {
+              Text('暂无文件')
+                .fontSize(14)
+                .fontColor('#888888')
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+            .backgroundColor('#F5F5F5')
+          }
+        }
+        .width('100%')
+        .height('70%')
+        .backgroundColor('#FFFFFF')
+        .position({ x: 0, y: '30%' })
+        .borderRadius({ topLeft: 16, topRight: 16 })
+        .shadow({ radius: 8, color: '#CCCCCC', offsetY: -4 })
+        .zIndex(20)
+      }
     }
     .width('100%')
     .height('100%')
   }
- 
-handleMessage(msg: ESObject): void {
+
+  handleMessage(msg: ESObject): void {
     const msgType: string = msg['type'] as string
-    hilog.info(DOMAIN, TAG, '>>> handleMessage: type=%{public}s', msgType)
 
     if (msgType === 'ai_response') {
-      hilog.info(DOMAIN, TAG, '>>> AI_RESPONSE received!');
       this.handleAiResponse(msg)
     } else if (msgType === 'task_status') {
-      hilog.info(DOMAIN, TAG, '>>> TASK_STATUS: %{public}s', msg['status'] as string);
       this.handleTaskStatus(msg)
     } else if (msgType === 'permission_request') {
-      hilog.info(DOMAIN, TAG, '>>> PERMISSION_REQUEST');
       this.handlePermissionRequest(msg)
-    } else if (msgType === 'auth_result') {
-      hilog.info(DOMAIN, TAG, '>>> AUTH_RESULT: %{public}s', msg['success'] as boolean ? 'SUCCESS' : 'FAILED');
-    } else if (msgType === 'exec_ack') {
-      hilog.info(DOMAIN, TAG, '>>> EXEC_ACK');
     } else if (msgType === 'file_added') {
       this.handleFileAdded(msg)
     } else if (msgType === 'file_updated') {
@@ -236,10 +301,7 @@ handleMessage(msg: ESObject): void {
     } else if (msgType === 'file_list') {
       this.handleFileList(msg)
     } else if (msgType === 'error') {
-      hilog.error(DOMAIN, TAG, '>>> ERROR: %{public}s', msg['message'] as string);
       this.handleError(msg)
-    } else {
-      hilog.warn(DOMAIN, TAG, '>>> UNKNOWN message type: %{public}s', msgType);
     }
   }
 
@@ -247,13 +309,9 @@ handleMessage(msg: ESObject): void {
     const content: string = msg['content'] as string || ''
     const messageId: string = msg['messageID'] as string || ''
     
-    hilog.info(DOMAIN, TAG, '>>> handleAiResponse: contentLen=%{public}d, msgId=%{public}s', content.length, messageId);
-    
-    // 移除运行状态消息
     this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
     
     if (messageId.length > 0 && messageId === this.lastAiMessageId) {
-      hilog.info(DOMAIN, TAG, '>>> Updating existing message');
       for (let i = 0; i < this.messages.length; i++) {
         if (this.messages[i].id === 'ai-' + messageId) {
           this.messages[i].content = content
@@ -270,32 +328,29 @@ handleMessage(msg: ESObject): void {
       timestamp: Date.now(),
       status: 'completed'
     }
-    hilog.info(DOMAIN, TAG, '>>> Adding new AI message to list');
     this.messages.push(newMsg)
     this.lastAiMessageId = messageId
   }
- 
+
   handleTaskStatus(msg: ESObject): void {
     const statusStr: string = msg['status'] as string
     const messageText: string = msg['message'] as string || ''
     
     if (statusStr === 'running') {
-      // 移除旧的运行状态消息，添加新的
       this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
       const newMsg: TaskMessage = {
         id: 'status-running',
         type: 'system',
-        content: messageText.length > 0 ? messageText : '任务执行中...',
+        content: messageText.length > 0 ? messageText : '正在处理...',
         timestamp: Date.now(),
         status: 'running'
       }
       this.messages.push(newMsg)
     } else if (statusStr === 'idle' || statusStr === 'ready' || statusStr === 'completed') {
-      // 移除运行状态消息
       this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
     }
   }
- 
+
   handlePermissionRequest(msg: ESObject): void {
     this.currentPermissionId = msg['id'] as string
     this.currentPermissionCommand = msg['command'] as string
@@ -311,7 +366,7 @@ handleMessage(msg: ESObject): void {
     }
     this.messages.push(permMsg)
   }
- 
+
   handleFileAdded(msg: ESObject): void {
     const file: FileInfo = {
       name: msg['filename'] as string,
@@ -322,7 +377,7 @@ handleMessage(msg: ESObject): void {
     }
     this.files.push(file)
   }
- 
+
   handleFileUpdated(msg: ESObject): void {
     const filename: string = msg['filename'] as string
     for (let i = 0; i < this.files.length; i++) {
@@ -338,34 +393,23 @@ handleMessage(msg: ESObject): void {
       }
     }
   }
- 
+
   handleFileRemoved(msg: ESObject): void {
     const filename: string = msg['filename'] as string
-    const newFiles: FileInfo[] = []
-    for (let i = 0; i < this.files.length; i++) {
-      if (this.files[i].path !== filename) {
-        newFiles.push(this.files[i])
-      }
-    }
-    this.files = newFiles
+    this.files = this.files.filter((f: FileInfo) => f.path !== filename)
   }
- 
+
   handleFileList(msg: ESObject): void {
     const filesArray: ESObject[] = msg['files'] as ESObject[]
-    const newFiles: FileInfo[] = []
-    for (let i = 0; i < filesArray.length; i++) {
-      const f: ESObject = filesArray[i]
-      newFiles.push({
-        name: f['name'] as string,
-        path: f['path'] as string,
-        size: f['size'] as number,
-        modified: f['modified'] as string,
-        url: f['url'] as string
-      })
-    }
-    this.files = newFiles
+    this.files = filesArray.map((f: ESObject) => ({
+      name: f['name'] as string,
+      path: f['path'] as string,
+      size: f['size'] as number,
+      modified: f['modified'] as string,
+      url: f['url'] as string
+    }))
   }
- 
+
   handleError(msg: ESObject): void {
     const errMsg: TaskMessage = {
       id: 'err-' + Date.now().toString(),
@@ -376,12 +420,12 @@ handleMessage(msg: ESObject): void {
     }
     this.messages.push(errMsg)
   }
- 
+
   sendCommand(): void {
     if (this.inputText.trim().length === 0) {
       return
     }
- 
+
     const userMsg: TaskMessage = {
       id: 'user-' + Date.now().toString(),
       type: 'user',
@@ -393,7 +437,7 @@ handleMessage(msg: ESObject): void {
     wsService.execCommand(this.inputText)
     this.inputText = ''
   }
- 
+
   replyPermission(answer: string): void {
     if (this.currentPermissionId.length > 0) {
       wsService.replyPermission(this.currentPermissionId, answer)
@@ -408,150 +452,147 @@ handleMessage(msg: ESObject): void {
       }
     }
   }
- 
-  toggleRecording(): void {
-    this.isRecording = !this.isRecording
-    if (this.isRecording) {
-      hilog.info(DOMAIN, TAG, 'Start recording')
-    } else {
-      hilog.info(DOMAIN, TAG, 'Stop recording')
-    }
-  }
 }
- 
+
 @Component
 struct MessageItem {
   @Prop message: TaskMessage
- 
+
   build() {
-    Row() {
-      Column() {
+    Column() {
+      Row() {
         if (this.message.type === 'user') {
-          Text('👤')
-            .fontSize(20)
-        } else if (this.message.type === 'ai') {
-          Text('🤖')
-            .fontSize(20)
-        } else if (this.message.type === 'permission') {
-          Text('⚠️')
-            .fontSize(20)
+          Text('我')
+            .fontSize(14)
+            .fontColor('#FFFFFF')
         } else {
-          Text('🔧')
-            .fontSize(20)
+          Text('AI')
+            .fontSize(14)
+            .fontColor('#FFFFFF')
         }
       }
-      .width(40)
-      .height(40)
-      .backgroundColor('#EEEEEE')
-      .borderRadius(20)
+      .width(36)
+      .height(36)
+      .borderRadius(18)
+      .backgroundColor(this.message.type === 'user' ? '#4CAF50' : '#2196F3')
       .justifyContent(FlexAlign.Center)
- 
+
       Column() {
         Text(this.message.content)
-          .fontSize(14)
-          .maxLines(10)
- 
-        Row() {
-          if (this.message.status === 'running') {
-            Progress({ value: 0, total: 100, type: ProgressType.Linear })
-              .width(50)
-              .height(4)
+          .fontSize(15)
+          .fontColor('#333333')
+          .maxLines(20)
+          .textOverflow({ overflow: TextOverflow.Clip })
+
+        if (this.message.status === 'running') {
+          Row() {
+            LoadingProgress()
+              .width(16)
+              .height(16)
               .color('#4CAF50')
+            
+            Text('正在处理...')
+              .fontSize(12)
+              .fontColor('#888888')
+              .margin({ left: 4 })
           }
- 
+          .margin({ top: 4 })
+        } else {
           Text(this.formatTime(this.message.timestamp))
             .fontSize(12)
-            .fontColor('#888888')
+            .fontColor('#AAAAAA')
+            .margin({ top: 4 })
         }
-        .margin({ top: 5 })
       }
-      .margin({ left: 10 })
+      .margin({ left: 8 })
       .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
-    .padding(10)
-    .backgroundColor(this.message.type === 'user' ? '#E3F2FD' : '#FFFFFF')
-    .borderRadius(8)
+    .padding({ top: 8, bottom: 8, left: 12, right: 12 })
+    .backgroundColor('#FFFFFF')
+    .borderRadius(12)
+    .margin({ top: 4, bottom: 4 })
   }
- 
+
   formatTime(timestamp: number): string {
     const date: Date = new Date(timestamp)
     const hours: number = date.getHours()
     const minutes: number = date.getMinutes()
-    const hoursStr: string = hours < 10 ? '0' + hours.toString() : hours.toString()
-    const minutesStr: string = minutes < 10 ? '0' + minutes.toString() : minutes.toString()
-    return hoursStr + ':' + minutesStr
+    return (hours < 10 ? '0' : '') + hours.toString() + ':' + (minutes < 10 ? '0' : '') + minutes.toString()
   }
 }
- 
+
 @Component
 struct FileItem {
   @Prop file: FileInfo
   @Prop serverIp: string = ''
   @Prop httpPort: number = 8081
- 
+
   build() {
     Row() {
-      Column() {
-        if (this.file.name.endsWith('.png') || this.file.name.endsWith('.jpg')) {
-          Text('🖼️')
-            .fontSize(20)
-        } else if (this.file.name.endsWith('.md') || this.file.name.endsWith('.txt')) {
-          Text('📄')
-            .fontSize(20)
-        } else if (this.file.name.endsWith('.json')) {
-          Text('📋')
-            .fontSize(20)
-        } else {
-          Text('📁')
-            .fontSize(20)
-        }
-      }
-      .width(40)
-      .height(40)
-      .backgroundColor('#EEEEEE')
-      .borderRadius(8)
-      .justifyContent(FlexAlign.Center)
- 
+      Text(this.getFileIcon())
+        .fontSize(24)
+
       Column() {
         Text(this.file.name)
           .fontSize(14)
           .fontWeight(FontWeight.Medium)
- 
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
         Text(this.formatSize(this.file.size))
           .fontSize(12)
           .fontColor('#888888')
       }
-      .margin({ left: 10 })
+      .margin({ left: 12 })
       .layoutWeight(1)
- 
+      .alignItems(HorizontalAlign.Start)
+
       Button('查看')
         .width(60)
-        .height(35)
+        .height(32)
+        .fontSize(14)
         .backgroundColor('#4CAF50')
         .onClick(() => {
           this.openFile()
         })
     }
     .width('100%')
-    .padding(10)
+    .padding(12)
     .backgroundColor('#FFFFFF')
     .borderRadius(8)
+    .margin({ top: 4, bottom: 4 })
   }
- 
+
+  getFileIcon(): string {
+    const name: string = this.file.name.toLowerCase()
+    if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.gif')) {
+      return '🖼'
+    } else if (name.endsWith('.md') || name.endsWith('.txt')) {
+      return '📄'
+    } else if (name.endsWith('.json')) {
+      return '📋'
+    } else if (name.endsWith('.pdf')) {
+      return '📑'
+    } else if (name.endsWith('.zip')) {
+      return '📦'
+    } else {
+      return '📁'
+    }
+  }
+
   openFile(): void {
     hilog.info(DOMAIN, TAG, `Open file: http://${this.serverIp}:${this.httpPort}${this.file.url}`)
   }
- 
+
   formatSize(size: number): string {
     if (size < 1024) {
       return size.toString() + ' B'
     } else if (size < 1024 * 1024) {
-      const kb: number = size / 1024
-      return kb.toFixed(1) + ' KB'
+      return (size / 1024).toFixed(1) + ' KB'
     } else {
-      const mb: number = size / 1024 / 1024
-      return mb.toFixed(1) + ' MB'
+      return (size / 1024 / 1024).toFixed(1) + ' MB'
     }
   }
 }
