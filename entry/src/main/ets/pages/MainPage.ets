@@ -574,6 +574,18 @@ struct MainPage {
   sendCommand(): void {
     if (this.inputText.trim().length === 0) return
 
+    if (!wsService.getConnected()) {
+      hilog.warn(DOMAIN, TAG, 'WebSocket not connected')
+      return
+    }
+
+    if (!wsService.getAuthenticated()) {
+      hilog.warn(DOMAIN, TAG, 'WebSocket not authenticated')
+      return
+    }
+
+    hilog.info(DOMAIN, TAG, 'Sending command: %{public}s', this.inputText)
+
     const userMsg: TaskMessage = {
       id: 'user-' + Date.now().toString(),
       type: 'user',
