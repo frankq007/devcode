@@ -519,9 +519,51 @@ async function handleExec(ws, msg) {
   }
 
   const { content } = msg;
-  const sent = await sendMessageToOpenCode(content);
   
+  // 处理斜杠命令
+  if (content.startsWith('/')) {
+    const result = await handleSlashCommand(content.trim());
+    ws.send(JSON.stringify({ type: 'exec_ack', success: result.success, message: result.message }));
+    return;
+  }
+  
+  const sent = await sendMessageToOpenCode(content);
   ws.send(JSON.stringify({ type: 'exec_ack', success: sent }));
+}
+
+/**
+ * 处理斜杠命令
+ */
+async function handleSlashCommand(command) {
+  const cmd = command.toLowerCase().replace(/[,;:.]/g, '').trim().split(/\s+/)[0];
+  
+  switch (cmd) {
+    case '/new':
+      try {
+        const newSession = await callOpenCodeAPI('POST', '/session', { title: 'DevCode Remote' });
+        state.currentSessionId = newSession.id;
+        state.lastSentMessageId = null;
+        state.lastSentResponseId = null;
+        state.isSessionIdle = true;
+        state.isSendingMessage = false;
+        console.log('[OpenCode] 创建新 session:', newSession.id);
+        broadcastToClients({ type: 'task_status', status: 'ready', message: '新会话已创建' });
+        return { success: true, message: '✅ 新会话已创建' };
+      } catch (err) {
+        console.error('[OpenCode] 创建 session 失败:', err.message);
+        return { success: false, message: '❌ 创建失败: ' + err.message };
+      }
+    
+    case '/help':
+      return { success: true, message: '可用命令:\n/new - 创建新会话\n/help - 显示帮助' };
+    
+    case '/clear':
+      return { success: false, message: '暂不支持 /clear' };
+    
+    default:
+      const sent = await sendMessageToOpenCode(command);
+      return { success: sent, message: sent ? '' : '发送失败' };
+  }
 }
 
 /**
