@@ -1,7 +1,10 @@
 {
   "src": [
-    "pages/ScanPage",
     "pages/MainPage",
+    "pages/ServerListPage",
+    "pages/AddServerPage",
+    "pages/ServerDetailPage",
+    "pages/ScanPage",
     "pages/Index"
   ]
 }

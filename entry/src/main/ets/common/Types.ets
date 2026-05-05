@@ -10,7 +10,6 @@ export interface WSMessage {
 }
 
  
-// 文件信息
 export interface FileInfo {
   name: string;
   path: string;
@@ -18,8 +17,23 @@ export interface FileInfo {
   modified: string;
   url: string
 }
- 
-// 连接配置
+
+export interface ServerConfig {
+  id: string;
+  name: string;
+  ip: string;
+  port: number;
+  username: string;
+  password: string;
+  isDefault: boolean;
+}
+
+export interface SessionInfo {
+  id: string;
+  title: string;
+  time: ESObject;
+}
+
 export interface ConnectionConfig {
   token: string;
   expire: number;
@@ -27,8 +41,7 @@ export interface ConnectionConfig {
   wsPort: number;
   httpPort: number;
 }
-    
-// 任务消息
+
 export interface TaskMessage {
   id: string;
   type: 'user' | 'ai' | 'system' | 'permission';

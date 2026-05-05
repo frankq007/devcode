@@ -4,39 +4,27 @@
 
 import { router, KeyboardAvoidMode, window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { wsService } from '../common/WebSocketService';
+import { openCodeService } from '../common/OpenCodeService';
 import { PermissionDialog } from '../components/PermissionDialog';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
-import type { FileInfo, TaskMessage, ConnectionConfig } from '../common/Types';
+import type { TaskMessage } from '../common/Types';
 import { speechRecognizer } from '@kit.CoreSpeechKit';
 
 const DOMAIN = 0xFF00;
 const TAG = 'MainPage';
 
-const DEBUG_CONFIG: ConnectionConfig = {
-  ip: '100.117.37.34',
-  wsPort: 8080,
-  httpPort: 8081,
-  token: 'debug-token-' + Date.now().toString(),
-  expire: Date.now() + 5 * 60 * 1000
-};
-
 @Entry
 @Component
 struct MainPage {
   @State messages: TaskMessage[] = [];
-  @State files: FileInfo[] = [];
   @State inputText: string = '';
   @State showPermissionDialog: boolean = false;
   @State currentPermissionId: string = '';
   @State currentPermissionCommand: string = '';
   @State currentPermissionExplanation: string = '';
-  @State connectionStatus: string = '连接中...';
-  @State serverIp: string = DEBUG_CONFIG.ip;
-  @State httpPort: number = DEBUG_CONFIG.httpPort;
+  @State connectionStatus: string = '未连接';
   @State lastAiMessageId: string = '';
   @State showMenu: boolean = false;
-  @State showFilesPanel: boolean = false;
   @State keyboardHeight: number = 0;
   @State isVoiceMode: boolean = true;
   @State isRecording: boolean = false;
@@ -65,19 +53,16 @@ struct MainPage {
     
     this.initSpeechRecognizer();
     
-    this.connectionStatus = '正在连接...';
-    wsService.connect(DEBUG_CONFIG).then((success: boolean) => {
-      this.connectionStatus = success ? '已连接' : '连接失败';
-    }).catch(() => {
-      this.connectionStatus = '连接错误';
-    });
+    if (openCodeService.getConnected()) {
+      this.connectionStatus = '已连接';
+    }
 
-    wsService.onMessage((msg: ESObject) => {
+    openCodeService.onMessage((msg: ESObject) => {
       this.handleMessage(msg);
     });
 
-    wsService.onStatusChange((connected: boolean) => {
-      this.connectionStatus = connected ? '已连接' : '已断开';
+    openCodeService.onStatusChange((connected: boolean) => {
+      this.connectionStatus = connected ? '已连接' : '未连接';
     });
   }
 
@@ -247,15 +232,18 @@ struct MainPage {
         // 输入区域 - 固定在底部
         Column() {
           Row() {
-            // 切换按钮 - 显示切换后的目标模式图标
+            // 切换按钮 - 使用系统图标
             Button() {
               if (this.isVoiceMode) {
-                Text('⌨')
+                // 键盘图标
+                SymbolGlyph($r('sys.symbol.keyboard'))
                   .fontSize(20)
-                  .fontColor('#182431')
+                  .fontColor([ '#182431' ])
               } else {
-                Text('🎤')
+                // 麦克风图标
+                SymbolGlyph($r('sys.symbol.mic'))
                   .fontSize(20)
+                  .fontColor([ '#182431' ])
               }
             }
             .width(44)
@@ -372,30 +360,40 @@ struct MainPage {
           .zIndex(99)
         
         Column() {
-          MenuButtonItem({ text: '扫一扫', onMenuClick: () => {
+          MenuButtonItem({ icon: '[+]', text: '新建会话', onMenuClick: () => {
             this.showMenu = false
-            router.pushUrl({ url: 'pages/ScanPage' })
+            if (openCodeService.getConnected()) {
+              openCodeService.createNewSession().then((sessionId: string) => {
+                if (sessionId.length > 0) {
+                  const msg: TaskMessage = {
+                    id: 'sys-' + Date.now().toString(),
+                    type: 'system',
+                    content: '✅ 新会话已创建',
+                    timestamp: Date.now(),
+                    status: 'completed'
+                  }
+                  this.messages.push(msg)
+                  this.listScroller.scrollEdge(Edge.Bottom)
+                }
+              })
+            } else {
+              router.pushUrl({ url: 'pages/ServerListPage' })
+            }
           }})
           
           Divider().strokeWidth(0.5).color('#05182431')
           
-          MenuButtonItem({ text: '文件传输', onMenuClick: () => {
+          MenuButtonItem({ icon: '[=]', text: '会话列表', onMenuClick: () => {
             this.showMenu = false
-            this.showFilesPanel = true
-          }})
-          
-          Divider().strokeWidth(0.5).color('#05182431')
-          
-          MenuButtonItem({ text: '设置', onMenuClick: () => {
-            this.showMenu = false
+            router.pushUrl({ url: 'pages/ServerListPage' })
           }})
         }
-        .width(108)
+        .width(120)
         .backgroundColor('#FFFFFF')
         .borderRadius(12)
         .shadow({ radius: 8, color: '#1A000000', offsetY: 2 })
         .position({ x: '100%', y: 56 })
-        .translate({ x: -116 })
+        .translate({ x: -128 })
         .zIndex(100)
       }
 
@@ -411,58 +409,6 @@ struct MainPage {
           onClose: () => { this.showPermissionDialog = false }
         })
       }
-
-      // 文件面板
-      if (this.showFilesPanel) {
-        Column() {
-          Row() {
-            Text('文件')
-              .fontSize(17)
-              .fontWeight(FontWeight.Medium)
-            
-            Blank()
-            
-            Text('关闭')
-              .fontSize(16)
-              .fontColor('#07C160')
-              .onClick(() => { this.showFilesPanel = false })
-          }
-          .width('100%')
-          .height(44)
-          .padding({ left: 16, right: 16 })
-          .backgroundColor('#FFFFFF')
-
-          if (this.files.length > 0) {
-            List() {
-              ForEach(this.files, (file: FileInfo) => {
-                ListItem() {
-                  FileItem({ file: file, serverIp: this.serverIp, httpPort: this.httpPort })
-                }
-              }, (file: FileInfo) => file.path)
-            }
-            .width('100%')
-            .layoutWeight(1)
-            .backgroundColor('#F7F7F7')
-          } else {
-            Column() {
-              Text('暂无文件')
-                .fontSize(14)
-                .fontColor('#888888')
-            }
-            .width('100%')
-            .layoutWeight(1)
-            .justifyContent(FlexAlign.Center)
-            .backgroundColor('#F7F7F7')
-          }
-        }
-        .width('100%')
-        .height('75%')
-        .backgroundColor('#FFFFFF')
-        .position({ x: 0, y: '25%' })
-        .borderRadius({ topLeft: 12, topRight: 12 })
-        .shadow({ radius: 6, color: '#00000022', offsetY: -3 })
-        .zIndex(50)
-      }
     }
     .width('100%')
     .height('100%')
@@ -477,10 +423,6 @@ struct MainPage {
       this.handleTaskStatus(msg)
     } else if (msgType === 'permission_request') {
       this.handlePermissionRequest(msg)
-    } else if (msgType === 'file_added') {
-      this.handleFileAdded(msg)
-    } else if (msgType === 'file_list') {
-      this.handleFileList(msg)
     } else if (msgType === 'error') {
       this.handleError(msg)
     }
@@ -532,38 +474,10 @@ struct MainPage {
     this.showPermissionDialog = true
   }
 
-  handleFileAdded(msg: ESObject): void {
-    const file: FileInfo = {
-      name: msg['filename'] as string,
-      path: msg['filename'] as string,
-      size: msg['size'] as number,
-      modified: msg['modified'] as string,
-      url: msg['url'] as string
-    }
-    this.files.push(file)
-  }
-
-  handleFileList(msg: ESObject): void {
-    const filesArray: ESObject[] = msg['files'] as ESObject[]
-    const newFiles: FileInfo[] = []
-    for (let i = 0; i < filesArray.length; i++) {
-      const f: ESObject = filesArray[i]
-      const file: FileInfo = {
-        name: f['name'] as string,
-        path: f['path'] as string,
-        size: f['size'] as number,
-        modified: f['modified'] as string,
-        url: f['url'] as string
-      }
-      newFiles.push(file)
-    }
-    this.files = newFiles
-  }
-
   handleError(msg: ESObject): void {
     const errMsg: TaskMessage = {
       id: 'err-' + Date.now().toString(),
-      type: 'ai',
+      type: 'system',
       content: '错误: ' + (msg['message'] as string || '未知错误'),
       timestamp: Date.now(),
       status: 'error'
@@ -574,13 +488,16 @@ struct MainPage {
   sendCommand(): void {
     if (this.inputText.trim().length === 0) return
 
-    if (!wsService.getConnected()) {
-      hilog.warn(DOMAIN, TAG, 'WebSocket not connected')
-      return
-    }
-
-    if (!wsService.getAuthenticated()) {
-      hilog.warn(DOMAIN, TAG, 'WebSocket not authenticated')
+    if (!openCodeService.getConnected()) {
+      hilog.warn(DOMAIN, TAG, 'OpenCode not connected')
+      const msg: TaskMessage = {
+        id: 'err-' + Date.now().toString(),
+        type: 'system',
+        content: '请先连接服务器',
+        timestamp: Date.now(),
+        status: 'error'
+      }
+      this.messages.push(msg)
       return
     }
 
@@ -594,7 +511,7 @@ struct MainPage {
       status: 'pending'
     }
     this.messages.push(userMsg)
-    wsService.execCommand(this.inputText)
+    openCodeService.sendMessage(this.inputText)
     this.inputText = ''
     
     setTimeout(() => {
@@ -604,7 +521,7 @@ struct MainPage {
 
   replyPermission(answer: string): void {
     if (this.currentPermissionId.length > 0) {
-      wsService.replyPermission(this.currentPermissionId, answer)
+      openCodeService.respondToPermission(this.currentPermissionId, answer)
       this.showPermissionDialog = false
     }
   }
@@ -613,21 +530,29 @@ struct MainPage {
 // 菜单项组件
 @Component
 struct MenuButtonItem {
+  @Prop icon: string = ''
   @Prop text: string = ''
   onMenuClick: () => void = () => {}
 
   build() {
-    Text(this.text)
-      .fontSize(14)
-      .fontColor('#182431')
-      .padding({ top: 12, bottom: 12, left: 16, right: 16 })
-      .width('100%')
-      .textAlign(TextAlign.Start)
-      .onClick(() => { this.onMenuClick() })
+    Row() {
+      Text(this.icon)
+        .fontSize(14)
+        .fontColor('#182431')
+        .width(32)
+      
+      Text(this.text)
+        .fontSize(14)
+        .fontColor('#182431')
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .padding({ top: 12, bottom: 12, left: 16, right: 16 })
+    .onClick(() => { this.onMenuClick() })
   }
 }
 
-// 聊天气泡组件 - HarmonyOS 设计风格
+// 聊天气泡组件 - 简洁圆角矩形风格
 @Component
 struct ChatBubble {
   @Prop message: TaskMessage
@@ -661,7 +586,7 @@ struct ChatBubble {
         }
         .width('100%')
       } else {
-        // AI消息 - 左对齐，使用 Markdown 渲染
+        // AI消息 - 左对齐
         Row() {
           Column() {
             if (this.message.status === 'running') {
@@ -689,66 +614,5 @@ struct ChatBubble {
     }
     .width('100%')
     .margin({ top: 6, bottom: 6 })
-  }
-}
-
-// 文件项组件
-@Component
-struct FileItem {
-  @Prop file: FileInfo
-  @Prop serverIp: string = ''
-  @Prop httpPort: number = 8081
-
-  build() {
-    Row() {
-      Text(this.getFileIcon()).fontSize(22)
-
-      Column() {
-        Text(this.file.name)
-          .fontSize(14)
-          .fontWeight(FontWeight.Medium)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-        Text(this.formatSize(this.file.size))
-          .fontSize(12)
-          .fontColor('#888888')
-      }
-      .margin({ left: 10 })
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-
-      Button('查看')
-        .width(50)
-        .height(28)
-        .fontSize(13)
-        .backgroundColor('#07C160')
-        .onClick(() => { this.openFile() })
-    }
-    .width('100%')
-    .padding(10)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(6)
-    .margin({ top: 3, bottom: 3 })
-  }
-
-  getFileIcon(): string {
-    const name: string = this.file.name.toLowerCase()
-    if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) return '🖼'
-    if (name.endsWith('.md') || name.endsWith('.txt')) return '📄'
-    if (name.endsWith('.json')) return '📋'
-    if (name.endsWith('.pdf')) return '📑'
-    if (name.endsWith('.zip')) return '📦'
-    return '📁'
-  }
-
-  openFile(): void {
-    hilog.info(DOMAIN, TAG, `Open file: http://${this.serverIp}:${this.httpPort}${this.file.url}`)
-  }
-
-  formatSize(size: number): string {
-    if (size < 1024) return size.toString() + ' B'
-    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
-    return (size / 1024 / 1024).toFixed(1) + ' MB'
   }
 }
