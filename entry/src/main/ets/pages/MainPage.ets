@@ -4,7 +4,7 @@
 
 import { router, KeyboardAvoidMode, window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { openCodeService } from '../common/OpenCodeService';
+import { serviceManager } from '../common/ServiceManager';
 import { PermissionDialog } from '../components/PermissionDialog';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { TaskMessage } from '../common/Types';
@@ -55,15 +55,15 @@ struct MainPage {
     
     this.initSpeechRecognizer();
     
-    if (openCodeService.getConnected()) {
+    if (serviceManager.getConnected()) {
       this.connectionStatus = '已连接';
     }
 
-    openCodeService.onMessage((msg: ESObject) => {
+    serviceManager.onMessage((msg: ESObject) => {
       this.handleMessage(msg);
     });
 
-    openCodeService.onStatusChange((connected: boolean) => {
+    serviceManager.onStatusChange((connected: boolean) => {
       this.connectionStatus = connected ? '已连接' : '未连接';
     });
   }
@@ -371,8 +371,8 @@ struct MainPage {
           
           MenuButtonItem({ icon: '[+]', text: '新建会话', onMenuClick: () => {
             this.showMenu = false
-            if (openCodeService.getConnected()) {
-              openCodeService.createNewSession().then((sessionId: string) => {
+            if (serviceManager.getConnected()) {
+              serviceManager.createNewSession().then((sessionId: string) => {
                 if (sessionId.length > 0) {
                   const msg: TaskMessage = {
                     id: 'sys-' + Date.now().toString(),
@@ -497,7 +497,7 @@ struct MainPage {
   sendCommand(): void {
     if (this.inputText.trim().length === 0) return
 
-    if (!openCodeService.getConnected()) {
+    if (!serviceManager.getConnected()) {
       hilog.warn(DOMAIN, TAG, 'OpenCode not connected')
       const msg: TaskMessage = {
         id: 'err-' + Date.now().toString(),
@@ -520,7 +520,7 @@ struct MainPage {
       status: 'pending'
     }
     this.messages.push(userMsg)
-    openCodeService.sendMessage(this.inputText)
+    serviceManager.sendMessage(this.inputText)
     this.inputText = ''
     
     setTimeout(() => {
@@ -530,7 +530,7 @@ struct MainPage {
 
   replyPermission(answer: string): void {
     if (this.currentPermissionId.length > 0) {
-      openCodeService.respondToPermission(this.currentPermissionId, answer)
+      serviceManager.respondToPermission(this.currentPermissionId, answer)
       this.showPermissionDialog = false
     }
   }

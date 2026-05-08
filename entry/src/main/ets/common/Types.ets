@@ -3,13 +3,11 @@
  * 移除索引签名，和 indexed类型
  */
 
- 
 export interface WSMessage {
   type: string;
   content?: string | ESObject;
 }
 
- 
 export interface FileInfo {
   name: string;
   path: string;
@@ -48,4 +46,15 @@ export interface TaskMessage {
   content: string;
   timestamp: number;
   status?: 'pending' | 'running' | 'completed' | 'error';
+}
+
+export interface RelayConfig {
+  serverUrl: string;
+  agentId: string;
+}
+
+export interface AgentInfo {
+  agentId: string;
+  name: string;
+  connectedAt: number;
 }

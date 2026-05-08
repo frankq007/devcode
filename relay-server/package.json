@@ -1,0 +1,14 @@
+{
+  "name": "relay-server",
+  "version": "1.0.0",
+  "description": "OpenCode Relay Server - Cloud message relay for DevCode",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "generate-cert": "bash generate-cert.sh"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "uuid": "^9.0.0"
+  }
+}
