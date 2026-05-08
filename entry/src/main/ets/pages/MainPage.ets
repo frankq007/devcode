@@ -9,6 +9,8 @@ import { PermissionDialog } from '../components/PermissionDialog';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { TaskMessage } from '../common/Types';
 import { speechRecognizer } from '@kit.CoreSpeechKit';
+import { scanBarcode } from '@kit.ScanKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 const DOMAIN = 0xFF00;
 const TAG = 'MainPage';
@@ -360,6 +362,13 @@ struct MainPage {
           .zIndex(99)
         
         Column() {
+          MenuButtonItem({ icon: '[-]', text: '扫一扫', onMenuClick: () => {
+            this.showMenu = false
+            this.startScan()
+          }})
+          
+          Divider().strokeWidth(0.5).color('#05182431')
+          
           MenuButtonItem({ icon: '[+]', text: '新建会话', onMenuClick: () => {
             this.showMenu = false
             if (openCodeService.getConnected()) {
@@ -523,6 +532,55 @@ struct MainPage {
     if (this.currentPermissionId.length > 0) {
       openCodeService.respondToPermission(this.currentPermissionId, answer)
       this.showPermissionDialog = false
+    }
+  }
+
+  async startScan(): Promise<void> {
+    this.showMenu = false
+    
+    try {
+      const options: scanBarcode.ScanOptions = {
+        enableMultiMode: false,
+        enableAlbum: true
+      }
+      
+      scanBarcode.startScan(options, (error: BusinessError, result: scanBarcode.ScanResult) => {
+        if (error) {
+          hilog.error(DOMAIN, TAG, 'Scan failed: %{public}s', error.message)
+        } else if (result && result.originalValue) {
+          hilog.info(DOMAIN, TAG, 'Scan result: %{public}s', result.originalValue)
+          this.parseQRCode(result.originalValue)
+        }
+      })
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Scan failed: %{public}s', JSON.stringify(e))
+    }
+  }
+
+  private parseQRCode(qrContent: string): void {
+    try {
+      const data: ESObject = JSON.parse(qrContent) as ESObject
+      
+      const ip: string = (data['ip'] as string) || ''
+      const port: string = (data['port'] as string) || '4096'
+      const username: string = (data['username'] as string) || ''
+      const password: string = (data['password'] as string) || ''
+      
+      if (ip.length > 0) {
+        router.pushUrl({
+          url: 'pages/AddServerPage',
+          params: {
+            serverIp: ip,
+            serverPort: port,
+            username: username,
+            password: password
+          }
+        })
+      } else {
+        hilog.warn(DOMAIN, TAG, 'QR code missing IP address')
+      }
+    } catch (e) {
+      hilog.error(DOMAIN, TAG, 'Parse QR code failed: %{public}s', JSON.stringify(e))
     }
   }
 }

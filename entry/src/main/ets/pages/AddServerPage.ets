@@ -22,6 +22,24 @@ struct AddServerPage {
   @State isConnecting: boolean = false;
   @State errorMessage: string = '';
 
+  aboutToAppear(): void {
+    const params: ESObject = router.getParams() as ESObject;
+    if (params) {
+      if (params['serverIp']) {
+        this.serverIp = params['serverIp'] as string;
+      }
+      if (params['serverPort']) {
+        this.serverPort = params['serverPort'] as string;
+      }
+      if (params['username']) {
+        this.username = params['username'] as string;
+      }
+      if (params['password']) {
+        this.password = params['password'] as string;
+      }
+    }
+  }
+
   build() {
     Column() {
       // 顶部标题栏
