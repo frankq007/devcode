@@ -338,7 +338,9 @@ function sendToRelay(msg) {
 function connectRelay() {
   console.log('[Relay] Connecting to:', config.RELAY_SERVER_URL);
   
-  state.relayWs = new WebSocket(config.RELAY_SERVER_URL);
+  state.relayWs = new WebSocket(config.RELAY_SERVER_URL, {
+    rejectUnauthorized: false
+  });
   
   state.relayWs.on('open', async () => {
     console.log('[Relay] Connected');
