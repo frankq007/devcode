@@ -199,7 +199,7 @@ function scheduleSseReconnect() {
 function handleOpenCodeEvent(event) {
   const eventType = event.type || event.name;
   
-  if (eventType !== 'message.part.delta' && eventType !== 'server.heartbeat') {
+  if (eventType !== 'message.part.updated' && eventType !== 'server.heartbeat') {
     console.log('[OpenCode] Event:', eventType);
   }
 
@@ -213,11 +213,31 @@ function handleOpenCodeEvent(event) {
     if (props.sessionID && info.id && info.role === 'assistant') {
       state.lastSentMessageId = info.id;
     }
-  } else if (eventType === 'message.part.delta') {
-    handleStreamDelta(event);
+  } else if (eventType === 'message.part.updated' || eventType === 'message.part.delta') {
+    handlePartUpdated(event);
   } else if (eventType === 'session.idle') {
     if (!state.isSessionIdle) {
       broadcastToClients({ type: 'task_status', status: 'idle', message: '完成' });
+      
+      state.currentToolCalls.forEach((toolInfo, toolId) => {
+        if (toolInfo.status === 'running') {
+          toolInfo.status = 'completed';
+          state.completedToolCalls++;
+          broadcastToClients({
+            type: 'stream_delta',
+            deltaType: 'tool_result',
+            toolId: toolId,
+            toolName: toolInfo.name,
+            toolOutput: toolInfo.output.substring(0, 2000),
+            toolStatus: 'completed',
+            progress: {
+              current: state.completedToolCalls,
+              total: state.toolCallCount,
+              description: `完成: ${toolInfo.name}`
+            }
+          });
+        }
+      });
     }
     state.isSessionIdle = true;
     
@@ -245,115 +265,114 @@ function resetStreamState() {
   state.completedToolCalls = 0;
 }
 
-function handleStreamDelta(event) {
-  if (state.isSessionIdle) {
-    state.isSessionIdle = false;
-    resetStreamState();
-    broadcastToClients({ type: 'stream_start', messageID: 'stream-' + Date.now() });
-  }
-
+function handlePartUpdated(event) {
   const props = event.properties || {};
   const part = props.part || {};
-  const partType = part.type;
-
-  if (partType === 'text') {
-    const text = part.text || '';
-    if (text) {
-      state.currentStreamContent += text;
-      broadcastToClients({
-        type: 'stream_delta',
-        deltaType: 'text',
-        content: text,
-        accumulated: state.currentStreamContent
-      });
-    }
-  } else if (partType === 'thinking') {
-    const thinking = part.thinking || '';
-    if (thinking) {
-      state.currentThinking += thinking;
-      broadcastToClients({
-        type: 'stream_delta',
-        deltaType: 'thinking',
-        content: thinking,
-        accumulated: state.currentThinking
-      });
-    }
-  } else if (partType === 'tool_call') {
-    const toolId = part.id || 'tool-' + Date.now();
-    const toolName = part.name || part.tool || 'unknown';
+  const partType = part.type || '';
+  const callId = part.callID || part.id || 'unknown';
+  
+  if (partType === 'tool') {
+    const toolName = part.tool || 'unknown';
+    const metadata = part.state?.metadata || {};
+    const output = metadata.output || '';
+    const description = metadata.description || '';
     
-    if (!state.currentToolCalls.has(toolId)) {
+    if (!state.currentToolCalls.has(callId)) {
       state.toolCallCount++;
-      state.currentToolCalls.set(toolId, {
-        id: toolId,
+      state.currentToolCalls.set(callId, {
+        id: callId,
         name: toolName,
-        input: '',
+        input: description,
         output: '',
-        status: 'pending',
-        timestamp: Date.now()
+        status: 'running',
+        timestamp: Date.now(),
+        lastOutputLen: 0
       });
+      
+      if (state.isSessionIdle) {
+        state.isSessionIdle = false;
+        resetStreamState();
+        state.toolCallCount = 1;
+        state.currentToolCalls.set(callId, {
+          id: callId,
+          name: toolName,
+          input: description,
+          output: '',
+          status: 'running',
+          timestamp: Date.now(),
+          lastOutputLen: 0
+        });
+        broadcastToClients({ type: 'stream_start', messageID: 'stream-' + Date.now() });
+      }
       
       broadcastToClients({
         type: 'stream_delta',
         deltaType: 'tool_start',
-        toolId: toolId,
+        toolId: callId,
         toolName: toolName,
         progress: {
           current: state.completedToolCalls + 1,
           total: state.toolCallCount,
-          description: `准备执行: ${toolName}`
+          description: description.length > 0 ? `执行: ${description}` : `准备执行: ${toolName}`
         }
       });
     }
-
-    const toolInput = part.input || part.args || '';
-    if (toolInput) {
-      const toolInfo = state.currentToolCalls.get(toolId);
-      if (typeof toolInput === 'object') {
-        toolInfo.input = JSON.stringify(toolInput, null, 2);
-      } else {
-        toolInfo.input += toolInput;
-      }
-      
-      broadcastToClients({
-        type: 'stream_delta',
-        deltaType: 'tool_input',
-        toolId: toolId,
-        toolName: toolName,
-        toolInput: toolInfo.input,
-        progress: {
-          current: state.completedToolCalls + 1,
-          total: state.toolCallCount,
-          description: `正在执行: ${toolName}`
-        }
-      });
-    }
-  } else if (partType === 'tool_result') {
-    const toolId = part.id || part.toolId;
-    const toolOutput = part.output || part.result || '';
-    const toolStatus = part.status || 'completed';
     
-    if (state.currentToolCalls.has(toolId)) {
-      const toolInfo = state.currentToolCalls.get(toolId);
-      toolInfo.output = typeof toolOutput === 'object' ? JSON.stringify(toolOutput, null, 2) : String(toolOutput);
-      toolInfo.status = toolStatus;
-      
-      if (toolStatus === 'completed') {
-        state.completedToolCalls++;
-      }
+    const toolInfo = state.currentToolCalls.get(callId);
+    if (output.length > toolInfo.lastOutputLen) {
+      toolInfo.output = output;
+      toolInfo.lastOutputLen = output.length;
+      toolInfo.status = 'running';
       
       broadcastToClients({
         type: 'stream_delta',
         deltaType: 'tool_result',
-        toolId: toolId,
-        toolName: toolInfo.name,
-        toolOutput: toolInfo.output,
-        toolStatus: toolStatus,
+        toolId: callId,
+        toolName: toolName,
+        toolOutput: output.substring(0, 2000),
+        toolStatus: 'running',
         progress: {
-          current: state.completedToolCalls,
+          current: state.completedToolCalls + 1,
           total: state.toolCallCount,
-          description: toolStatus === 'completed' ? `完成: ${toolInfo.name}` : `执行中: ${toolInfo.name}`
+          description: description.length > 0 ? description : `执行中: ${toolName}`
         }
+      });
+    }
+  } else if (partType === 'text') {
+    if (state.isSessionIdle) {
+      state.isSessionIdle = false;
+      resetStreamState();
+      broadcastToClients({ type: 'stream_start', messageID: 'stream-' + Date.now() });
+    }
+    
+    const text = part.text || '';
+    if (text && text !== state.currentStreamContent) {
+      const newContent = text.slice(state.currentStreamContent.length);
+      if (newContent) {
+        state.currentStreamContent = text;
+        broadcastToClients({
+          type: 'stream_delta',
+          deltaType: 'text',
+          content: newContent,
+          accumulated: text
+        });
+      }
+    }
+  } else if (partType === 'thinking') {
+    if (state.isSessionIdle) {
+      state.isSessionIdle = false;
+      resetStreamState();
+      broadcastToClients({ type: 'stream_start', messageID: 'stream-' + Date.now() });
+    }
+    
+    const thinking = part.thinking || '';
+    if (thinking && thinking !== state.currentThinking) {
+      state.currentThinking = thinking;
+      broadcastToClients({
+        type: 'stream_delta',
+        deltaType: 'thinking',
+        content: thinking,
+        accumulated: thinking
       });
     }
   }
