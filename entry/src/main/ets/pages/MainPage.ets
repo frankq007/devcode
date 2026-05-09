@@ -7,7 +7,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { serviceManager } from '../common/ServiceManager';
 import { PermissionDialog } from '../components/PermissionDialog';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
-import type { TaskMessage } from '../common/Types';
+import type { TaskMessage, ToolCallInfo, ProgressInfo } from '../common/Types';
 import { speechRecognizer } from '@kit.CoreSpeechKit';
 import { scanBarcode } from '@kit.ScanKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -33,6 +33,13 @@ struct MainPage {
   @State voiceButtonText: string = '按住说话';
   @State recognizedText: string = '';
   @State isCanceling: boolean = false;
+  @State currentStreamMessageId: string = '';
+  @State currentStreamContent: string = '';
+  @State currentThinking: string = '';
+  @State currentToolCalls: ToolCallInfo[] = [];
+  @State currentProgress: ProgressInfo | null = null;
+  @State showThinking: boolean = false;
+  @State showToolCalls: boolean = true;
   private listScroller: Scroller = new Scroller();
   private windowClass: window.Window | null = null;
   private asrEngine: speechRecognizer.SpeechRecognitionEngine | null = null;
@@ -66,9 +73,30 @@ struct MainPage {
     serviceManager.onStatusChange((connected: boolean) => {
       this.connectionStatus = connected ? '已连接' : '未连接';
     });
+    
+    serviceManager.setPageVisible(true);
+  }
+
+  onPageShow(): void {
+    hilog.info(DOMAIN, TAG, 'onPageShow');
+    serviceManager.setPageVisible(true);
+    
+    const pendingMessages: ESObject[] = serviceManager.getPendingMessages();
+    if (pendingMessages.length > 0) {
+      hilog.info(DOMAIN, TAG, 'Processing %{public}d pending messages', pendingMessages.length);
+      for (let i = 0; i < pendingMessages.length; i++) {
+        this.handleMessage(pendingMessages[i]);
+      }
+    }
+  }
+
+  onPageHide(): void {
+    hilog.info(DOMAIN, TAG, 'onPageHide');
+    serviceManager.setPageVisible(false);
   }
 
   aboutToDisappear(): void {
+    serviceManager.setPageVisible(false);
     if (this.windowClass) {
       this.windowClass.off('keyboardHeightChange');
     }
@@ -434,23 +462,167 @@ struct MainPage {
       this.handlePermissionRequest(msg)
     } else if (msgType === 'error') {
       this.handleError(msg)
+    } else if (msgType === 'stream_start') {
+      this.handleStreamStart(msg)
+    } else if (msgType === 'stream_delta') {
+      this.handleStreamDelta(msg)
     }
+  }
+
+  handleStreamStart(msg: ESObject): void {
+    this.currentStreamMessageId = (msg['messageID'] as string) || 'stream-' + Date.now().toString()
+    this.currentStreamContent = ''
+    this.currentThinking = ''
+    this.currentToolCalls = []
+    this.currentProgress = null
+    this.showThinking = false
+    
+    const streamMsg: TaskMessage = {
+      id: this.currentStreamMessageId,
+      type: 'ai',
+      content: '',
+      timestamp: Date.now(),
+      status: 'running',
+      thinking: '',
+      toolCalls: [],
+      isStreaming: true
+    }
+    this.messages.push(streamMsg)
+    
+    setTimeout(() => {
+      this.listScroller.scrollEdge(Edge.Bottom)
+    }, 100)
+  }
+
+  handleStreamDelta(msg: ESObject): void {
+    const deltaType: string = (msg['deltaType'] as string) || ''
+    
+    if (deltaType === 'text') {
+      const content: string = (msg['content'] as string) || ''
+      this.currentStreamContent += content
+      this.updateStreamMessage()
+    } else if (deltaType === 'thinking') {
+      const thinking: string = (msg['content'] as string) || ''
+      this.currentThinking += thinking
+      this.updateStreamMessage()
+    } else if (deltaType === 'tool_start') {
+      const toolId: string = (msg['toolId'] as string) || 'tool-' + Date.now().toString()
+      const toolName: string = (msg['toolName'] as string) || 'unknown'
+      const progress: ProgressInfo | null = this.parseProgress(msg['progress'])
+      
+      const newTool: ToolCallInfo = {
+        id: toolId,
+        name: toolName,
+        input: '',
+        output: '',
+        status: 'pending',
+        timestamp: Date.now()
+      }
+      this.currentToolCalls.push(newTool)
+      if (progress) {
+        this.currentProgress = progress
+      }
+      this.updateStreamMessage()
+    } else if (deltaType === 'tool_input') {
+      const toolId: string = (msg['toolId'] as string) || ''
+      const toolInput: string = (msg['toolInput'] as string) || ''
+      const progress: ProgressInfo | null = this.parseProgress(msg['progress'])
+      
+      const toolIndex: number = this.currentToolCalls.findIndex((t: ToolCallInfo) => t.id === toolId)
+      if (toolIndex >= 0) {
+        this.currentToolCalls[toolIndex].input = toolInput
+        this.currentToolCalls[toolIndex].status = 'running'
+      }
+      if (progress) {
+        this.currentProgress = progress
+      }
+      this.updateStreamMessage()
+    } else if (deltaType === 'tool_result') {
+      const toolId: string = (msg['toolId'] as string) || ''
+      const toolOutput: string = (msg['toolOutput'] as string) || ''
+      const toolStatus: string = (msg['toolStatus'] as string) || 'completed'
+      const progress: ProgressInfo | null = this.parseProgress(msg['progress'])
+      
+      const toolIndex: number = this.currentToolCalls.findIndex((t: ToolCallInfo) => t.id === toolId)
+      if (toolIndex >= 0) {
+        this.currentToolCalls[toolIndex].output = toolOutput
+        this.currentToolCalls[toolIndex].status = toolStatus as 'pending' | 'running' | 'completed' | 'error'
+      }
+      if (progress) {
+        this.currentProgress = progress
+      }
+      this.updateStreamMessage()
+    }
+  }
+
+  parseProgress(progressData: ESObject): ProgressInfo | null {
+    if (!progressData) return null
+    return {
+      current: (progressData['current'] as number) || 0,
+      total: (progressData['total'] as number) || 0,
+      description: (progressData['description'] as string) || ''
+    }
+  }
+
+  updateStreamMessage(): void {
+    const index: number = this.messages.findIndex((m: TaskMessage) => m.id === this.currentStreamMessageId)
+    if (index >= 0) {
+      const updatedMsg: TaskMessage = {
+        id: this.currentStreamMessageId,
+        type: 'ai',
+        content: this.currentStreamContent,
+        timestamp: this.messages[index].timestamp,
+        status: 'running',
+        thinking: this.currentThinking,
+        toolCalls: this.currentToolCalls.slice(),
+        isStreaming: true
+      }
+      if (this.currentProgress) {
+        updatedMsg.progress = this.currentProgress
+      }
+      this.messages[index] = updatedMsg
+      this.messages = [...this.messages]
+    }
+    
+    setTimeout(() => {
+      this.listScroller.scrollEdge(Edge.Bottom)
+    }, 50)
   }
 
   handleAiResponse(msg: ESObject): void {
     const content: string = msg['content'] as string || ''
     const messageId: string = msg['messageID'] as string || ''
     
-    this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
-    
-    const newMsg: TaskMessage = {
-      id: 'ai-' + messageId,
-      type: 'ai',
-      content: content,
-      timestamp: Date.now(),
-      status: 'completed'
+    if (this.currentStreamMessageId.length > 0) {
+      const index: number = this.messages.findIndex((m: TaskMessage) => m.id === this.currentStreamMessageId)
+      if (index >= 0) {
+        const existingMsg: TaskMessage = this.messages[index]
+        this.messages[index] = {
+          id: this.currentStreamMessageId,
+          type: 'ai',
+          content: content,
+          timestamp: existingMsg.timestamp,
+          status: 'completed',
+          thinking: existingMsg.thinking,
+          toolCalls: existingMsg.toolCalls,
+          progress: existingMsg.progress,
+          isStreaming: false
+        }
+        this.messages = [...this.messages]
+      }
+      this.currentStreamMessageId = ''
+    } else {
+      this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
+      
+      const newMsg: TaskMessage = {
+        id: 'ai-' + messageId,
+        type: 'ai',
+        content: content,
+        timestamp: Date.now(),
+        status: 'completed'
+      }
+      this.messages.push(newMsg)
     }
-    this.messages.push(newMsg)
     this.lastAiMessageId = messageId
     
     setTimeout(() => {
@@ -461,17 +633,16 @@ struct MainPage {
   handleTaskStatus(msg: ESObject): void {
     const statusStr: string = msg['status'] as string
     
-    if (statusStr === 'running') {
-      this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
-      const newMsg: TaskMessage = {
-        id: 'status-running',
-        type: 'ai',
-        content: '正在处理...',
-        timestamp: Date.now(),
-        status: 'running'
+    if (statusStr === 'idle' || statusStr === 'ready') {
+      if (this.currentStreamMessageId.length > 0) {
+        const index: number = this.messages.findIndex((m: TaskMessage) => m.id === this.currentStreamMessageId)
+        if (index >= 0 && this.messages[index].status === 'running') {
+          this.messages[index].status = 'completed'
+          this.messages[index].isStreaming = false
+          this.messages = [...this.messages]
+        }
+        this.currentStreamMessageId = ''
       }
-      this.messages.push(newMsg)
-    } else if (statusStr === 'idle' || statusStr === 'ready') {
       this.messages = this.messages.filter((m: TaskMessage) => m.status !== 'running')
     }
   }
@@ -614,6 +785,8 @@ struct MenuButtonItem {
 @Component
 struct ChatBubble {
   @Prop message: TaskMessage
+  @State showThinkingContent: boolean = false
+  @State showToolOutputs: Set<string> = new Set()
 
   build() {
     Column() {
@@ -647,17 +820,60 @@ struct ChatBubble {
         // AI消息 - 左对齐
         Row() {
           Column() {
-            if (this.message.status === 'running') {
-              Row() {
-                LoadingProgress().width(16).height(16).color('#007DFF')
-                Text(this.message.content).fontSize(14).fontColor('#99182431').margin({ left: 6 })
-              }
-              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-              .width('100%')
-            } else {
-              MarkdownRenderer({ content: this.message.content })
-                .width('100%')
+            // 进度指示
+            if (this.message.progress && this.message.isStreaming) {
+              this.ProgressIndicator(
+                this.message.progress.current,
+                this.message.progress.total,
+                this.message.progress.description
+              )
+            }
+            
+            // 思考过程（折叠）
+            if (this.message.thinking && this.message.thinking.length > 0) {
+              this.ThinkingSection(
+                this.message.thinking,
+                this.showThinkingContent,
+                () => { this.showThinkingContent = !this.showThinkingContent }
+              )
+            }
+            
+            // 工具调用
+            if (this.message.toolCalls && this.message.toolCalls.length > 0) {
+              ForEach(this.message.toolCalls, (tool: ToolCallInfo) => {
+                this.ToolCallSection(
+                  tool.id,
+                  tool.name,
+                  tool.input,
+                  tool.output || '',
+                  tool.status,
+                  this.showToolOutputs.has(tool.id),
+                  () => {
+                    if (this.showToolOutputs.has(tool.id)) {
+                      this.showToolOutputs.delete(tool.id)
+                    } else {
+                      this.showToolOutputs.add(tool.id)
+                    }
+                    this.showToolOutputs = new Set(this.showToolOutputs)
+                  }
+                )
+              }, (tool: ToolCallInfo) => tool.id)
+            }
+            
+            // 文本内容
+            if (this.message.content.length > 0 || this.message.status === 'running') {
+              if (this.message.status === 'running' && this.message.content.length === 0) {
+                Row() {
+                  LoadingProgress().width(16).height(16).color('#007DFF')
+                  Text('正在思考...').fontSize(14).fontColor('#99182431').margin({ left: 6 })
+                }
                 .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+                .width('100%')
+              } else {
+                MarkdownRenderer({ content: this.message.content })
+                  .width('100%')
+                  .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+              }
             }
           }
           .backgroundColor('#FFFFFF')
@@ -672,5 +888,143 @@ struct ChatBubble {
     }
     .width('100%')
     .margin({ top: 6, bottom: 6 })
+  }
+
+  @Builder
+  ProgressIndicator(current: number, total: number, description: string): void {
+    Row() {
+      LoadingProgress().width(12).height(12).color('#007DFF')
+      
+      if (total > 0) {
+        Text(`第 ${current}/${total} 步`)
+          .fontSize(12)
+          .fontColor('#007DFF')
+          .margin({ left: 8 })
+      }
+      
+      if (description.length > 0) {
+        Text(description)
+          .fontSize(12)
+          .fontColor('#99182431')
+          .margin({ left: 8 })
+      }
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    .backgroundColor('#F0F7FF')
+    .borderRadius({ topLeft: 12, topRight: 12 })
+  }
+
+  @Builder
+  ThinkingSection(thinking: string, isExpanded: boolean, onToggle: () => void): void {
+    Column() {
+      Row() {
+        Text('💭')
+          .fontSize(14)
+          .margin({ right: 6 })
+        
+        Text('思考过程')
+          .fontSize(14)
+          .fontColor('#182431')
+          .fontWeight(FontWeight.Medium)
+        
+        Blank()
+        
+        Text(isExpanded ? '收起' : '展开')
+          .fontSize(12)
+          .fontColor('#007DFF')
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+      .onClick(() => { onToggle() })
+      
+      if (isExpanded) {
+        Text(thinking)
+          .fontSize(13)
+          .fontColor('#666666')
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 8 })
+          .maxLines(50)
+      }
+    }
+    .width('100%')
+    .backgroundColor('#FFF8E1')
+    .borderRadius(8)
+    .margin({ bottom: 4 })
+  }
+
+  @Builder
+  ToolCallSection(toolId: string, toolName: string, toolInput: string, toolOutput: string, 
+                  toolStatus: 'pending' | 'running' | 'completed' | 'error', 
+                  isExpanded: boolean, onToggle: () => void): void {
+    Column() {
+      Row() {
+        if (toolStatus === 'running') {
+          LoadingProgress().width(12).height(12).color('#007DFF')
+        } else if (toolStatus === 'completed') {
+          Text('✓')
+            .fontSize(14)
+            .fontColor('#4CAF50')
+        } else if (toolStatus === 'error') {
+          Text('✗')
+            .fontSize(14)
+            .fontColor('#E84026')
+        } else {
+          Text('○')
+            .fontSize(14)
+            .fontColor('#99182431')
+        }
+        
+        Text('🔧')
+          .fontSize(14)
+          .margin({ left: 6, right: 4 })
+        
+        Text(toolName)
+          .fontSize(13)
+          .fontColor('#182431')
+          .fontWeight(FontWeight.Medium)
+        
+        if (toolInput.length > 0 && toolInput.length < 50) {
+          Text(toolInput)
+            .fontSize(12)
+            .fontColor('#666666')
+            .margin({ left: 8 })
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+        }
+        
+        Blank()
+        
+        if (toolOutput && toolOutput.length > 0) {
+          Text(isExpanded ? '收起' : '查看输出')
+            .fontSize(12)
+            .fontColor('#007DFF')
+            .onClick(() => { onToggle() })
+        }
+      }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+      
+      if (isExpanded && toolOutput && toolOutput.length > 0) {
+        Column() {
+          Text('输出:')
+            .fontSize(12)
+            .fontColor('#888888')
+            .margin({ bottom: 4 })
+          
+          Text(toolOutput)
+            .fontSize(12)
+            .fontColor('#182431')
+            .width('100%')
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, bottom: 8 })
+        .backgroundColor('#F5F5F5')
+      }
+    }
+    .width('100%')
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .margin({ bottom: 4 })
   }
 }

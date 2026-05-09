@@ -5,6 +5,7 @@ import type { ServerConfig, RelayConfig } from './Types';
 
 const DOMAIN = 0xFF00;
 const TAG = 'ServiceManager';
+const MAX_PENDING_MESSAGES = 100;
 
 export type ConnectionMode = 'direct' | 'relay';
 
@@ -16,6 +17,8 @@ export class ServiceManager {
   private isConnected: boolean = false;
   private messageCallbacks: MessageCallback[] = [];
   private statusCallbacks: StatusCallback[] = [];
+  private pendingMessages: ESObject[] = [];
+  private isPageVisible: boolean = true;
 
   setMode(mode: ConnectionMode): void {
     this.mode = mode;
@@ -24,6 +27,29 @@ export class ServiceManager {
 
   getMode(): ConnectionMode {
     return this.mode;
+  }
+
+  setPageVisible(visible: boolean): void {
+    this.isPageVisible = visible;
+    hilog.info(DOMAIN, TAG, 'Page visible: %{public}s', visible.toString());
+    if (visible && this.pendingMessages.length > 0) {
+      this.flushPendingMessages();
+    }
+  }
+
+  private flushPendingMessages(): void {
+    hilog.info(DOMAIN, TAG, 'Flushing %{public}d pending messages', this.pendingMessages.length);
+    const messages: ESObject[] = this.pendingMessages.slice();
+    this.pendingMessages = [];
+    for (let i = 0; i < messages.length; i++) {
+      this.notifyMessageInternal(messages[i]);
+    }
+  }
+
+  getPendingMessages(): ESObject[] {
+    const messages: ESObject[] = this.pendingMessages.slice();
+    this.pendingMessages = [];
+    return messages;
   }
 
   async connectDirect(server: ServerConfig): Promise<boolean> {
@@ -113,6 +139,18 @@ export class ServiceManager {
   }
 
   private notifyMessage(msg: ESObject): void {
+    if (!this.isPageVisible) {
+      if (this.pendingMessages.length >= MAX_PENDING_MESSAGES) {
+        this.pendingMessages.shift();
+      }
+      this.pendingMessages.push(msg);
+      hilog.info(DOMAIN, TAG, 'Message cached (page hidden): %{public}s', (msg['type'] as string) || 'unknown');
+    } else {
+      this.notifyMessageInternal(msg);
+    }
+  }
+
+  private notifyMessageInternal(msg: ESObject): void {
     for (let i = 0; i < this.messageCallbacks.length; i++) {
       this.messageCallbacks[i](msg);
     }

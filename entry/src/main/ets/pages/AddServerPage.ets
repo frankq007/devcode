@@ -21,8 +21,8 @@ struct AddServerPage {
   @State serverPort: string = '4096';
   @State username: string = '';
   @State password: string = '';
-  @State relayUrl: string = '';
-  @State agentId: string = '';
+  @State relayUrl: string = 'wss://39.106.208.57:9443';
+  @State agentId: string = 'default-agent';
   @State agents: AgentInfo[] = [];
   @State isConnecting: boolean = false;
   @State errorMessage: string = '';
@@ -416,6 +416,19 @@ struct AddServerPage {
       const success: boolean = await serviceManager.connectRelay(config);
       
       if (success) {
+        const server: ServerConfig = {
+          id: 'relay-' + Date.now().toString(),
+          name: '云中转 - ' + this.agentId,
+          ip: '',
+          port: 0,
+          username: '',
+          password: '',
+          isDefault: false,
+          mode: 'relay',
+          relayUrl: this.relayUrl,
+          agentId: this.agentId
+        };
+        await serverStorage.addServer(server);
         router.replaceUrl({ url: 'pages/MainPage' });
       } else {
         this.errorMessage = '连接失败，请检查云服务器和 Agent ID';

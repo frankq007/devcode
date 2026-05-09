@@ -8,7 +8,9 @@
     "generate-cert": "bash generate-cert.sh"
   },
   "dependencies": {
-    "ws": "^8.18.0",
     "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "ws": "^8.20.0"
   }
 }

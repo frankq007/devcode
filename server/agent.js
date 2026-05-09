@@ -11,7 +11,12 @@ const state = {
   isSessionIdle: true,
   lastSentResponseId: null,
   sseReconnectTimer: null,
-  reconnectTimer: null
+  reconnectTimer: null,
+  currentStreamContent: '',
+  currentThinking: '',
+  currentToolCalls: new Map(),
+  toolCallCount: 0,
+  completedToolCalls: 0
 };
 
 function getAuthHeader() {
@@ -201,6 +206,7 @@ function handleOpenCodeEvent(event) {
   if (eventType === 'server.connected') {
     broadcastToClients({ type: 'task_status', status: 'ready', message: 'OpenCode 已连接' });
     state.isSessionIdle = true;
+    resetStreamState();
   } else if (eventType === 'message.updated') {
     const props = event.properties || {};
     const info = props.info || {};
@@ -208,10 +214,7 @@ function handleOpenCodeEvent(event) {
       state.lastSentMessageId = info.id;
     }
   } else if (eventType === 'message.part.delta') {
-    if (state.isSessionIdle) {
-      state.isSessionIdle = false;
-      broadcastToClients({ type: 'task_status', status: 'running', message: '正在处理...' });
-    }
+    handleStreamDelta(event);
   } else if (eventType === 'session.idle') {
     if (!state.isSessionIdle) {
       broadcastToClients({ type: 'task_status', status: 'idle', message: '完成' });
@@ -224,11 +227,135 @@ function handleOpenCodeEvent(event) {
         sendCompletedMessage(state.currentSessionId, state.lastSentMessageId);
       }
     }
+    resetStreamState();
   } else if (eventType === 'permission.request') {
     handlePermissionEvent(event.data);
   } else if (eventType === 'session.error') {
     broadcastToClients({ type: 'task_status', status: 'error', message: 'Session 错误' });
     state.isSessionIdle = true;
+    resetStreamState();
+  }
+}
+
+function resetStreamState() {
+  state.currentStreamContent = '';
+  state.currentThinking = '';
+  state.currentToolCalls = new Map();
+  state.toolCallCount = 0;
+  state.completedToolCalls = 0;
+}
+
+function handleStreamDelta(event) {
+  if (state.isSessionIdle) {
+    state.isSessionIdle = false;
+    resetStreamState();
+    broadcastToClients({ type: 'stream_start', messageID: 'stream-' + Date.now() });
+  }
+
+  const props = event.properties || {};
+  const part = props.part || {};
+  const partType = part.type;
+
+  if (partType === 'text') {
+    const text = part.text || '';
+    if (text) {
+      state.currentStreamContent += text;
+      broadcastToClients({
+        type: 'stream_delta',
+        deltaType: 'text',
+        content: text,
+        accumulated: state.currentStreamContent
+      });
+    }
+  } else if (partType === 'thinking') {
+    const thinking = part.thinking || '';
+    if (thinking) {
+      state.currentThinking += thinking;
+      broadcastToClients({
+        type: 'stream_delta',
+        deltaType: 'thinking',
+        content: thinking,
+        accumulated: state.currentThinking
+      });
+    }
+  } else if (partType === 'tool_call') {
+    const toolId = part.id || 'tool-' + Date.now();
+    const toolName = part.name || part.tool || 'unknown';
+    
+    if (!state.currentToolCalls.has(toolId)) {
+      state.toolCallCount++;
+      state.currentToolCalls.set(toolId, {
+        id: toolId,
+        name: toolName,
+        input: '',
+        output: '',
+        status: 'pending',
+        timestamp: Date.now()
+      });
+      
+      broadcastToClients({
+        type: 'stream_delta',
+        deltaType: 'tool_start',
+        toolId: toolId,
+        toolName: toolName,
+        progress: {
+          current: state.completedToolCalls + 1,
+          total: state.toolCallCount,
+          description: `准备执行: ${toolName}`
+        }
+      });
+    }
+
+    const toolInput = part.input || part.args || '';
+    if (toolInput) {
+      const toolInfo = state.currentToolCalls.get(toolId);
+      if (typeof toolInput === 'object') {
+        toolInfo.input = JSON.stringify(toolInput, null, 2);
+      } else {
+        toolInfo.input += toolInput;
+      }
+      
+      broadcastToClients({
+        type: 'stream_delta',
+        deltaType: 'tool_input',
+        toolId: toolId,
+        toolName: toolName,
+        toolInput: toolInfo.input,
+        progress: {
+          current: state.completedToolCalls + 1,
+          total: state.toolCallCount,
+          description: `正在执行: ${toolName}`
+        }
+      });
+    }
+  } else if (partType === 'tool_result') {
+    const toolId = part.id || part.toolId;
+    const toolOutput = part.output || part.result || '';
+    const toolStatus = part.status || 'completed';
+    
+    if (state.currentToolCalls.has(toolId)) {
+      const toolInfo = state.currentToolCalls.get(toolId);
+      toolInfo.output = typeof toolOutput === 'object' ? JSON.stringify(toolOutput, null, 2) : String(toolOutput);
+      toolInfo.status = toolStatus;
+      
+      if (toolStatus === 'completed') {
+        state.completedToolCalls++;
+      }
+      
+      broadcastToClients({
+        type: 'stream_delta',
+        deltaType: 'tool_result',
+        toolId: toolId,
+        toolName: toolInfo.name,
+        toolOutput: toolInfo.output,
+        toolStatus: toolStatus,
+        progress: {
+          current: state.completedToolCalls,
+          total: state.toolCallCount,
+          description: toolStatus === 'completed' ? `完成: ${toolInfo.name}` : `执行中: ${toolInfo.name}`
+        }
+      });
+    }
   }
 }
 

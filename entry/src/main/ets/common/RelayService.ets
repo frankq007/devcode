@@ -18,17 +18,26 @@ export class RelayService {
   private statusCallbacks: StatusCallback[] = [];
   private agentListCallbacks: AgentListCallback[] = [];
   private heartbeatTimer: number = 0;
+  private reconnectTimer: number = 0;
+  private shouldReconnect: boolean = true;
 
   async connect(config: RelayConfig): Promise<boolean> {
     this.config = config;
+    this.shouldReconnect = true;
+    this.stopReconnect();
     hilog.info(DOMAIN, TAG, 'Connecting to relay: %{public}s', config.serverUrl);
 
     try {
+      if (this.ws) {
+        this.ws.close();
+        this.ws = null;
+      }
       this.ws = webSocket.createWebSocket();
       
       this.ws.on('open', () => {
         hilog.info(DOMAIN, TAG, 'WebSocket opened');
         this.isConnected = true;
+        this.stopReconnect();
         this.notifyStatusChange(true);
         this.sendClientConnect();
         this.startHeartbeat();
@@ -48,6 +57,9 @@ export class RelayService {
         this.isConnected = false;
         this.stopHeartbeat();
         this.notifyStatusChange(false);
+        if (this.shouldReconnect) {
+          this.scheduleReconnect();
+        }
       });
 
       this.ws.on('error', (err: Error) => {
@@ -55,6 +67,9 @@ export class RelayService {
         this.isConnected = false;
         this.stopHeartbeat();
         this.notifyStatusChange(false);
+        if (this.shouldReconnect) {
+          this.scheduleReconnect();
+        }
       });
 
       await this.ws.connect(config.serverUrl, {
@@ -96,6 +111,27 @@ export class RelayService {
     }
   }
 
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer > 0) return;
+    if (!this.config) return;
+
+    hilog.info(DOMAIN, TAG, 'Scheduling reconnect in 5 seconds');
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = 0;
+      if (!this.isConnected && this.shouldReconnect) {
+        hilog.info(DOMAIN, TAG, 'Attempting reconnect...');
+        this.connect(this.config!);
+      }
+    }, 5000);
+  }
+
+  private stopReconnect(): void {
+    if (this.reconnectTimer > 0) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = 0;
+    }
+  }
+
   private handleMessage(data: string): void {
     try {
       const msg: ESObject = JSON.parse(data) as ESObject;
@@ -124,6 +160,8 @@ export class RelayService {
       } else if (msgType === 'exec_ack') {
         this.notifyMessage(msg);
       } else if (msgType === 'ai_response' || msgType === 'task_status' || msgType === 'permission_request') {
+        this.notifyMessage(msg);
+      } else if (msgType === 'stream_start' || msgType === 'stream_delta') {
         this.notifyMessage(msg);
       }
     } catch (e) {
@@ -220,7 +258,9 @@ export class RelayService {
   }
 
   close(): void {
+    this.shouldReconnect = false;
     this.stopHeartbeat();
+    this.stopReconnect();
     if (this.ws) {
       this.ws.close();
       this.ws.off('open');
