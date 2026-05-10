@@ -206,17 +206,21 @@ export class OpenCodeService {
 
   async sendMessage(content: string): Promise<boolean> {
     if (!this.currentSessionId || !this.currentServer) {
+      hilog.error(DOMAIN, TAG, 'sendMessage: No session or server');
       return false;
     }
+    
+    hilog.info(DOMAIN, TAG, 'Sending message to session %{public}s: %{public}s', this.currentSessionId, content);
     
     try {
       const part: MessagePart = { type: 'text', text: content };
       const model: ModelConfig = { providerID: 'alibaba-cn', modelID: 'glm-5' };
       const promptReq: PromptRequest = { parts: [part], model: model };
       await this.callAPIObject('POST', `/session/${this.currentSessionId}/prompt_async`, promptReq);
+      hilog.info(DOMAIN, TAG, 'Message sent successfully');
       return true;
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'Send message failed');
+      hilog.error(DOMAIN, TAG, 'Send message failed: %{public}s', JSON.stringify(e));
       return false;
     }
   }
@@ -287,13 +291,16 @@ export class OpenCodeService {
 
   private startEventListener(): void {
     if (!this.currentServer || this.eventRequest) {
+      hilog.warn(DOMAIN, TAG, 'startEventListener: No server or already listening');
       return;
     }
 
-    hilog.info(DOMAIN, TAG, 'Starting SSE connection');
+    hilog.info(DOMAIN, TAG, 'Starting SSE connection to %{public}s:%{public}d',
+      this.currentServer.ip, this.currentServer.port);
 
     this.eventRequest = http.createHttp();
     const url: string = `http://${this.currentServer.ip}:${this.currentServer.port}/event`;
+    hilog.info(DOMAIN, TAG, 'SSE URL: %{public}s', url);
 
     this.eventRequest.on('dataReceive', (data: ArrayBuffer) => {
       const str: string = this.arrayBufferToString(data);
@@ -303,6 +310,13 @@ export class OpenCodeService {
     this.eventRequest.on('dataEnd', () => {
       hilog.info(DOMAIN, TAG, 'SSE connection closed');
       this.eventRequest = null;
+      // 尝试重连
+      setTimeout(() => {
+        if (this.currentServer && this.isConnected) {
+          hilog.info(DOMAIN, TAG, 'Attempting SSE reconnect');
+          this.startEventListener();
+        }
+      }, 5000);
     });
 
     const options: http.HttpRequestOptions = {
@@ -336,6 +350,7 @@ export class OpenCodeService {
   }
 
   private handleSseData(data: string): void {
+    hilog.debug(DOMAIN, TAG, 'SSE data received: %{public}s', data.substring(0, 300));
     const lines: string[] = data.split('\n');
     for (let i = 0; i < lines.length; i++) {
       const line: string = lines[i].trim();
@@ -348,7 +363,7 @@ export class OpenCodeService {
           const event: ESObject = JSON.parse(jsonStr) as ESObject;
           this.handleOpenCodeEvent(event);
         } catch (e) {
-          hilog.warn(DOMAIN, TAG, 'Parse event failed');
+          hilog.warn(DOMAIN, TAG, 'Parse event failed: %{public}s', jsonStr.substring(0, 100));
         }
       }
     }
@@ -358,7 +373,7 @@ export class OpenCodeService {
     const eventType: string = (event['type'] || event['name']) as string;
 
     if (eventType !== 'message.part.delta' && eventType !== 'server.heartbeat') {
-      hilog.info(DOMAIN, TAG, 'Event: %{public}s', eventType);
+      hilog.info(DOMAIN, TAG, 'Event: %{public}s, data: %{public}s', eventType, JSON.stringify(event).substring(0, 200));
     }
 
     if (eventType === 'message.part.delta') {
@@ -369,10 +384,17 @@ export class OpenCodeService {
     } else if (eventType === 'message.updated') {
       const props: ESObject = event['properties'] as ESObject || {};
       const info: ESObject = props['info'] as ESObject || {};
+      hilog.info(DOMAIN, TAG, 'message.updated: sessionID=%{public}s, id=%{public}s, role=%{public}s',
+        props['sessionID'] as string || 'null',
+        info['id'] as string || 'null',
+        info['role'] as string || 'null');
       if (props['sessionID'] && info['id'] && info['role'] === 'assistant') {
         this.lastSentMessageId = info['id'] as string;
+        hilog.info(DOMAIN, TAG, 'Set lastSentMessageId: %{public}s', this.lastSentMessageId);
       }
     } else if (eventType === 'session.idle') {
+      hilog.info(DOMAIN, TAG, 'session.idle: lastSentMessageId=%{public}s, currentSessionId=%{public}s',
+        this.lastSentMessageId, this.currentSessionId);
       if (this.lastStatus !== 'idle') {
         this.lastStatus = 'idle';
         this.sendStatusMessage('idle', '完成');
@@ -381,11 +403,31 @@ export class OpenCodeService {
       if (this.lastSentMessageId.length > 0 && this.currentSessionId.length > 0) {
         if (this.lastSentResponseId !== this.lastSentMessageId) {
           this.lastSentResponseId = this.lastSentMessageId;
+          hilog.info(DOMAIN, TAG, 'Fetching completed message: session=%{public}s, msg=%{public}s',
+            this.currentSessionId, this.lastSentMessageId);
           this.fetchCompletedMessage(this.currentSessionId, this.lastSentMessageId);
+        } else {
+          hilog.info(DOMAIN, TAG, 'Message already sent: %{public}s', this.lastSentMessageId);
         }
+      } else {
+        hilog.warn(DOMAIN, TAG, 'Missing IDs: lastSentMessageId=%{public}s, currentSessionId=%{public}s',
+          this.lastSentMessageId, this.currentSessionId);
+      }
+    } else if (eventType === 'session.message') {
+      // 备选：直接从 session.message 事件获取消息
+      const data: ESObject = event['data'] as ESObject || {};
+      if (data['sessionID'] && data['messageID']) {
+        hilog.info(DOMAIN, TAG, 'session.message: session=%{public}s, msg=%{public}s',
+          data['sessionID'] as string, data['messageID'] as string);
+        this.fetchCompletedMessage(data['sessionID'] as string, data['messageID'] as string);
       }
     } else if (eventType === 'permission.request') {
       this.handlePermissionEvent(event);
+    } else {
+      // 记录未处理的事件，帮助调试
+      if (eventType !== 'server.heartbeat' && eventType !== 'session.status') {
+        hilog.debug(DOMAIN, TAG, 'Unhandled event: %{public}s', eventType);
+      }
     }
   }
 
@@ -402,12 +444,18 @@ export class OpenCodeService {
 
   private async fetchCompletedMessage(sessionId: string, messageId: string): Promise<void> {
     if (!this.currentServer) {
+      hilog.error(DOMAIN, TAG, 'fetchCompletedMessage: No server');
       return;
     }
 
+    hilog.info(DOMAIN, TAG, 'Fetching message from: /session/%{public}s/message/%{public}s', sessionId, messageId);
+
     try {
       const msgDetail: ESObject = await this.callAPIObject('GET', `/session/${sessionId}/message/${messageId}`) as ESObject;
+      hilog.info(DOMAIN, TAG, 'Message detail: %{public}s', JSON.stringify(msgDetail).substring(0, 500));
+      
       const parts: ESObject[] = msgDetail['parts'] as ESObject[] || [];
+      hilog.info(DOMAIN, TAG, 'Parts count: %{public}d', parts.length);
 
       const textParts: string[] = [];
       const toolParts: string[] = [];
@@ -424,8 +472,10 @@ export class OpenCodeService {
       }
 
       const fullContent: string = (textParts.join('\n') + '\n' + toolParts.join('\n')).trim();
+      hilog.info(DOMAIN, TAG, 'Full content length: %{public}d', fullContent.length);
 
       if (fullContent.length > 0) {
+        hilog.info(DOMAIN, TAG, 'Sending ai_response with content: %{public}s', fullContent.substring(0, 100));
         for (let j = 0; j < this.messageCallbacks.length; j++) {
           const msg: ESObject = {
             'type': 'ai_response',
@@ -434,9 +484,11 @@ export class OpenCodeService {
           };
           this.messageCallbacks[j](msg);
         }
+      } else {
+        hilog.warn(DOMAIN, TAG, 'No content to send');
       }
     } catch (e) {
-      hilog.error(DOMAIN, TAG, 'Fetch message failed');
+      hilog.error(DOMAIN, TAG, 'Fetch message failed: %{public}s', JSON.stringify(e));
     }
   }
 

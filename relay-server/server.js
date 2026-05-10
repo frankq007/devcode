@@ -80,6 +80,12 @@ function handleMessage(ws, msg) {
     case 'permission_response':
       handlePermissionResponse(ws, msg);
       break;
+    case 'stream_start':
+      handleStreamStart(ws, msg);
+      break;
+    case 'stream_delta':
+      handleStreamDelta(ws, msg);
+      break;
     case 'pong':
       ws.isAlive = true;
       break;
@@ -266,6 +272,53 @@ function handlePermissionResponse(ws, msg) {
   }));
   
   console.log(`[Relay] Permission response forwarded: Client ${ws.id} -> Agent ${ws.linkedAgentId}`);
+}
+
+function handleStreamStart(ws, msg) {
+  if (ws.type !== 'agent') {
+    return;
+  }
+  
+  const clientId = msg.clientId;
+  if (!clientId || !state.clients.has(clientId)) {
+    return;
+  }
+  
+  const clientWs = state.clients.get(clientId).ws;
+  if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+    clientWs.send(JSON.stringify({
+      type: 'stream_start',
+      messageID: msg.messageID
+    }));
+  }
+  
+  console.log(`[Relay] Stream start forwarded: Agent ${ws.id} -> Client ${clientId}`);
+}
+
+function handleStreamDelta(ws, msg) {
+  if (ws.type !== 'agent') {
+    return;
+  }
+  
+  const clientId = msg.clientId;
+  if (!clientId || !state.clients.has(clientId)) {
+    return;
+  }
+  
+  const clientWs = state.clients.get(clientId).ws;
+  if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+    clientWs.send(JSON.stringify({
+      type: 'stream_delta',
+      deltaType: msg.deltaType,
+      content: msg.content,
+      toolId: msg.toolId,
+      toolName: msg.toolName,
+      toolInput: msg.toolInput,
+      toolOutput: msg.toolOutput,
+      toolStatus: msg.toolStatus,
+      progress: msg.progress
+    }));
+  }
 }
 
 function cleanupConnection(ws) {

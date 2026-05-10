@@ -2,7 +2,7 @@ module.exports = {
   RELAY_SERVER_URL: process.env.RELAY_SERVER_URL || process.env.RELAY_SERVER_URL_WSS || 'wss://39.106.208.57:9443',
   RELAY_SERVER_URL_WSS: process.env.RELAY_SERVER_URL_WSS || 'wss://39.106.208.57:9443',
   AGENT_ID: process.env.AGENT_ID || 'default-agent',
-  AGENT_NAME: process.env.AGENT_NAME || 'My DevCode Agent',
+  AGENT_NAME: process.env.AGENT_NAME || 'DevCode Agent',
   HEARTBEAT_MS: 30000,
   RECONNECT_MS: 5000,
   
